@@ -1,0 +1,24 @@
+ATUALIZAÇÃO v0.2.1
+
+1. Copie todo o conteúdo deste ZIP para a RAIZ do projeto atual.
+2. Confirme a substituição dos arquivos existentes.
+3. Não mova nem apague a pasta .git do seu projeto.
+4. Não há nova dependência nesta versão. Se a v0.2.0 já está funcionando, basta executar:
+
+   npm run dev
+
+Principais mudanças:
+- Visualização "Todas as turmas · semana" com UMA turma por linha.
+- Em tela desktop, não há mais uma barra horizontal individual por turma.
+- Novo botão "Gerar PDF semanal": cria um único PDF com todas as turmas do curso selecionado.
+- Mantido "PDF da turma" e o botão PDF em cada turma.
+- O PDF geral organiza duas turmas por página quando a grade possui até 5 horários, seguindo o modelo institucional enviado.
+
+Após validar:
+
+   git status
+   git add .
+   git commit -m "feat: improve weekly overview and export course weekly PDF"
+   git push origin main
+   git tag -a v0.2.1 -m "Weekly overview and course PDF export"
+   git push origin v0.2.1

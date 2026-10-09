@@ -4,7 +4,7 @@ Protótipo em JavaScript para visualização e edição do horário acadêmico a
 
 ## Versão atual
 
-`v0.2.0`
+`v0.2.1`
 
 ## Funcionalidades
 
@@ -16,8 +16,9 @@ Protótipo em JavaScript para visualização e edição do horário acadêmico a
 - Bloqueio de movimentos que atravessam o intervalo entre horários.
 - Validação inicial de conflito de professor em todas as turmas importadas.
 - Visualização **Todas as turmas · dia**.
-- Visualização **Todas as turmas · semana**.
+- Visualização **Todas as turmas · semana** com **uma turma por linha**, sem várias barras horizontais na tela desktop.
 - Geração de PDF semanal de uma turma, inspirado nos relatórios institucionais de ensalamento.
+- Geração de **um único PDF semanal do curso**, reunindo todas as turmas e organizando duas turmas por página quando a grade possui quatro/cinco horários.
 - Desfazer a última movimentação e restaurar a turma.
 - Opção de movimentação sem drag and drop no painel de detalhes.
 
@@ -68,11 +69,11 @@ Mude `Visualização` para `Todas as turmas · semana`.
 
 ### Gerar PDF
 
-1. Selecione a turma.
-2. Informe uma data na semana desejada.
-3. Clique em `Gerar PDF da turma`.
+1. Informe uma data na semana desejada.
+2. Clique em `Gerar PDF semanal` para gerar **um único arquivo com todas as turmas do curso selecionado**.
+3. Para gerar apenas uma turma, use `PDF da turma` ou o botão `PDF` no cabeçalho da turma na visão semanal geral.
 
-Na visão semanal geral também existe um botão `PDF` em cada turma.
+O PDF geral segue o modelo institucional: duas turmas por página quando possível, com as datas da semana no cabeçalho.
 
 O PDF usa os dados disponíveis no Excel atual. Campos de sala/laboratório serão exibidos automaticamente quando esse dado fizer parte do modelo de cada aula em uma etapa futura.
 
@@ -102,9 +103,9 @@ ensalamento-demo/
 ```powershell
 git status
 git add .
-git commit -m "feat: add day/week views, fix drag-and-drop and export weekly PDF"
+git commit -m "feat: improve weekly overview and export course weekly PDF"
 git push origin main
 
-git tag -a v0.2.0 -m "Day/week views, drag-and-drop fix and weekly PDF"
-git push origin v0.2.0
+git tag -a v0.2.1 -m "Weekly overview and course PDF export"
+git push origin v0.2.1
 ```

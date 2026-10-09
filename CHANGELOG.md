@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.1] - 2026-10-09
+
+### Adicionado
+- Geração de um único PDF semanal contendo todas as turmas do curso selecionado.
+- Organização do PDF geral em duas turmas por página quando a quantidade de horários permite.
+- Botão principal `Gerar PDF semanal`, mantendo também a exportação individual por turma.
+
+### Melhorado
+- Visualização `Todas as turmas · semana` agora apresenta uma turma por linha.
+- Removidas as barras horizontais individuais da visão semanal em telas desktop; a grade utiliza toda a largura disponível.
+
 ## [0.2.0] - 2026-10-09
 
 ### Adicionado

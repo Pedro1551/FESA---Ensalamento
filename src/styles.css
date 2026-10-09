@@ -103,14 +103,14 @@ h1 { margin: 0; font-size: clamp(27px, 3vw, 38px); line-height: 1.1; letter-spac
 .overview-lesson.is-changed { background: #fff9df; border-color: #d5b552; }
 .overview-empty { margin: auto 0; color: var(--muted); font-size: 12px; }
 
-.week-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.week-overview { grid-template-columns: 1fr; align-items: start; }
 .mini-schedule-card { min-width: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
 .mini-schedule-heading { height: 38px; padding: 0 10px; background: #123f72; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .mini-schedule-heading strong { font-size: 13px; }
 .mini-pdf-button { min-height: 26px; padding: 0 8px; border: 1px solid rgba(255,255,255,.55); border-radius: 6px; background: transparent; color: #fff; cursor: pointer; font-weight: 800; font-size: 10px; }
 .mini-pdf-button:hover { background: rgba(255,255,255,.12); }
-.mini-schedule-grid { --mini-day-count: 6; --mini-slot-count: 4; display: grid; grid-template-columns: 54px repeat(var(--mini-day-count), minmax(105px, 1fr)); grid-template-rows: 30px repeat(var(--mini-slot-count), 56px); min-width: 760px; position: relative; }
-.mini-schedule-card { overflow-x: auto; }
+.mini-schedule-grid { --mini-day-count: 6; --mini-slot-count: 4; display: grid; grid-template-columns: 62px repeat(var(--mini-day-count), minmax(0, 1fr)); grid-template-rows: 32px repeat(var(--mini-slot-count), 62px); min-width: 0; width: 100%; position: relative; }
+.mini-schedule-card { overflow: hidden; }
 .mini-corner, .mini-day, .mini-time, .mini-cell { border-right: 1px solid #ccd5df; border-bottom: 1px solid #ccd5df; }
 .mini-corner, .mini-day { display: flex; align-items: center; justify-content: center; background: #e7edf4; font-size: 10px; font-weight: 800; }
 .mini-time { display: flex; align-items: center; justify-content: center; background: #eef2f6; font-size: 10px; color: #4b5565; }
@@ -137,8 +137,9 @@ h1 { margin: 0; font-size: clamp(27px, 3vw, 38px); line-height: 1.1; letter-spac
 .hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .empty-state { padding: 24px; color: var(--muted); }
 
-@media (max-width: 1120px) {
-  .week-overview { grid-template-columns: 1fr; }
+@media (max-width: 760px) {
+  .mini-schedule-card { overflow-x: auto; }
+  .mini-schedule-grid { min-width: 880px; }
 }
 
 @media (max-width: 900px) {

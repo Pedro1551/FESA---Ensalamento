@@ -1,7 +1,7 @@
 {
   "name": "ensalamento-demo",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "jspdf": "^3.0.4",
+    "jspdf": "^3.0.3",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -1,10 +1,10 @@
 import './styles.css';
 import { parseScheduleWorkbook } from './excelParser.js';
-import { generateClassWeekPdf } from './pdfGenerator.js';
+import { generateClassWeekPdf, generateCourseWeekPdf } from './pdfGenerator.js';
 
 const DEFAULT_FILE = '/data/Horario Azul - Faculdade - 2026.2.xls';
 const FALLBACK_FILE = '/data/horario-fallback.json';
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 const VIEW_CLASS_WEEK = 'class-week';
 const VIEW_COURSE_DAY = 'course-day';
 const VIEW_COURSE_WEEK = 'course-week';
@@ -17,7 +17,7 @@ app.innerHTML = `
       <div>
         <p class="eyebrow">PROTÓTIPO ACADÊMICO · v${APP_VERSION}</p>
         <h1>Ensalamento 2026.2</h1>
-        <p class="subtitle">Grade importada diretamente do Excel, com visualização diária/semanal, edição por arrastar e soltar e PDF da turma.</p>
+        <p class="subtitle">Grade importada diretamente do Excel, com visualização diária/semanal, edição por arrastar e soltar e relatórios PDF semanais.</p>
       </div>
       <label class="file-button">
         <span>Carregar outro Excel</span>
@@ -51,7 +51,8 @@ app.innerHTML = `
         <input id="weekDateInput" class="date-input" type="date" />
       </label>
       <div class="toolbar-actions">
-        <button id="pdfButton" class="button primary" type="button">Gerar PDF da turma</button>
+        <button id="coursePdfButton" class="button primary" type="button">Gerar PDF semanal</button>
+        <button id="pdfButton" class="button secondary" type="button">PDF da turma</button>
         <button id="undoButton" class="button secondary" type="button" disabled>Desfazer</button>
         <button id="resetButton" class="button secondary" type="button">Restaurar turma</button>
       </div>
@@ -109,6 +110,7 @@ const els = {
   dayFilterLabel: document.querySelector('#dayFilterLabel'),
   daySelect: document.querySelector('#daySelect'),
   weekDateInput: document.querySelector('#weekDateInput'),
+  coursePdfButton: document.querySelector('#coursePdfButton'),
   pdfButton: document.querySelector('#pdfButton'),
   undoButton: document.querySelector('#undoButton'),
   resetButton: document.querySelector('#resetButton'),
@@ -649,7 +651,7 @@ function renderCourseWeekOverview() {
   const course = getCourse();
   const classes = sortClasses(course?.classes ?? []);
   els.scheduleTitle.textContent = `${course.name} · visão semanal de todas as turmas`;
-  els.scheduleMeta.textContent = `${classes.length} turmas · os botões PDF geram a semana da turma correspondente`;
+  els.scheduleMeta.textContent = `${classes.length} turmas · uma turma por linha · use “Gerar PDF semanal” para exportar todas em um único arquivo`;
   els.overviewContainer.innerHTML = '';
   els.overviewContainer.className = 'overview-container week-overview';
   classes.forEach((classItem) => els.overviewContainer.append(renderMiniSchedule(classItem)));
@@ -774,6 +776,22 @@ function generatePdfForClass(classItem = getClass()) {
   }
 }
 
+
+function generatePdfForCourse(course = getCourse()) {
+  if (!course) return;
+  try {
+    const filename = generateCourseWeekPdf({
+      course,
+      weekDate: els.weekDateInput.value,
+      sourceName: dataset.source,
+    });
+    setStatus(`PDF semanal gerado: ${filename}`, 'success');
+  } catch (error) {
+    console.error(error);
+    setStatus(`Não foi possível gerar o PDF semanal: ${error.message}`, 'error');
+  }
+}
+
 function render() {
   updateViewControls();
   els.overviewContainer.className = 'overview-container';
@@ -860,6 +878,7 @@ els.fileInput.addEventListener('change', (event) => {
 
 els.undoButton.addEventListener('click', undo);
 els.resetButton.addEventListener('click', resetCurrentClass);
+els.coursePdfButton.addEventListener('click', () => generatePdfForCourse());
 els.pdfButton.addEventListener('click', () => generatePdfForClass());
 els.manualMoveButton.addEventListener('click', () => {
   if (!selectedLessonId) return;
