@@ -1,0 +1,24 @@
+ENSALAMENTO FESA - ATUALIZAÇÃO v0.2.0
+
+1. Faça um backup/commit da v0.1.0 antes de substituir os arquivos.
+2. Copie o conteúdo desta pasta para a raiz do seu projeto, preservando as pastas src/ e docs/.
+3. No terminal, dentro do projeto, execute:
+
+   npm install
+   npm run dev
+
+4. Teste:
+   - arrastar aula para horário vazio;
+   - arrastar aula sobre outra aula de mesma duração;
+   - Todas as turmas · dia;
+   - Todas as turmas · semana;
+   - Gerar PDF da turma.
+
+5. Versione:
+
+   git status
+   git add .
+   git commit -m "feat: add day/week views, fix drag-and-drop and export weekly PDF"
+   git push origin main
+   git tag -a v0.2.0 -m "Day/week views, drag-and-drop fix and weekly PDF"
+   git push origin v0.2.0

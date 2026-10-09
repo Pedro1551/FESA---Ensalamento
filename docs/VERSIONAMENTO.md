@@ -1,41 +1,28 @@
 # Versionamento Git/GitHub
 
-Para este projeto pequeno, a recomendação inicial é manter `main` sempre utilizável e criar branches curtas apenas para funcionalidades maiores.
+Para este projeto, a recomendação inicial é manter `main` sempre utilizável e criar branches curtas apenas para funcionalidades maiores.
 
-## Primeira publicação
+## Fluxo de trabalho
 
-No terminal do VS Code, dentro da pasta do projeto:
+Antes de alterar uma funcionalidade maior:
 
-```bash
-git init
-git add .
-git commit -m "feat: create scheduling demo with Excel import and drag-and-drop"
-git branch -M main
-git remote add origin URL_DO_SEU_REPOSITORIO
-git push -u origin main
+```powershell
+git switch -c feature/nome-da-funcionalidade
 ```
 
-## Fluxo para próximas alterações
+Depois de testar:
 
-Exemplo para criar a exportação da grade:
-
-```bash
-git switch -c feature/export-schedule
-```
-
-Após concluir:
-
-```bash
+```powershell
 git add .
-git commit -m "feat: add schedule export"
+git commit -m "feat: describe the implemented feature"
 git switch main
-git merge feature/export-schedule
+git merge feature/nome-da-funcionalidade
 git push origin main
 ```
 
-## Padrão de commits
+Para correções pequenas, também é aceitável trabalhar diretamente na `main` neste estágio de protótipo, desde que cada mudança seja registrada em um commit claro.
 
-Use mensagens curtas no padrão Conventional Commits:
+## Padrão de commits
 
 - `feat:` nova funcionalidade.
 - `fix:` correção.
@@ -47,28 +34,31 @@ Use mensagens curtas no padrão Conventional Commits:
 Exemplos:
 
 ```text
-feat: add professor conflict validation
-feat: add room schedule view
-fix: preserve lesson duration after drag
-refactor: isolate Excel parser
-docs: document local setup
+feat: add daily course overview
+feat: export class weekly schedule to PDF
+fix: allow drop over occupied lesson cards
+fix: prevent lesson block from crossing break
+refactor: isolate PDF generation module
 ```
 
 ## Versões
 
-O projeto começa em `0.1.0`.
-
-Sugestão:
-
-- `0.1.0`: importação do Excel + drag-and-drop.
-- `0.2.0`: exportação e histórico local.
-- `0.3.0`: salas e conflitos completos.
-- `0.4.0`: backend/banco e colaboração.
+- `0.1.0`: importação do Excel + primeira grade com drag-and-drop.
+- `0.2.0`: correção do drag-and-drop + visões diária/semanal + PDF semanal por turma.
+- `0.3.0`: salas/laboratórios, conflitos de recursos e filtros mais completos.
+- `0.4.0`: persistência/backend e colaboração multiusuário.
 - `1.0.0`: primeira versão estável para uso institucional.
 
-Quando quiser marcar uma versão:
+## Publicar a v0.2.0
 
-```bash
-git tag -a v0.1.0 -m "Prototype: Excel import and drag-and-drop"
-git push origin v0.1.0
+Depois de copiar os arquivos da nova versão e executar `npm install`:
+
+```powershell
+git status
+git add .
+git commit -m "feat: add day/week views, fix drag-and-drop and export weekly PDF"
+git push origin main
+
+git tag -a v0.2.0 -m "Day/week views, drag-and-drop fix and weekly PDF"
+git push origin v0.2.0
 ```

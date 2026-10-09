@@ -1,56 +1,80 @@
-# Ensalamento — protótipo de grade acadêmica
+# Ensalamento FESA - Protótipo
 
-Versão atual: **0.1.0**
+Protótipo em JavaScript para visualização e edição do horário acadêmico a partir do arquivo **Horario Azul - Faculdade - 2026.2.xls**.
 
-Protótipo em JavaScript para validar a edição visual de uma grade acadêmica por **arrastar e soltar**. A aplicação lê diretamente a planilha `Horario Azul - Faculdade - 2026.2.xls`, identifica automaticamente cursos, turmas, dias, horários, disciplinas e professores e monta a grade no navegador.
+## Versão atual
 
-## O que já funciona
+`v0.2.0`
 
-- Leitura automática de `.xls` e `.xlsx` com SheetJS.
-- Detecção das planilhas visíveis que possuem blocos `Turma` + `Horário`.
-- Seleção de curso e turma.
-- Grade semanal construída a partir dos horários reais do Excel.
-- Drag-and-drop das aulas.
-- Troca automática quando o destino contém um bloco de mesma duração.
-- Bloqueio de destinos incompatíveis.
-- Detecção de conflito de professor entre todas as turmas importadas.
-- Destaque visual das aulas alteradas.
-- Botão para desfazer a última alteração.
-- Restauração da turma para a posição original da planilha.
-- Carregamento de outro arquivo Excel pelo navegador.
+## Funcionalidades
 
-> Nesta versão as mudanças existem somente na memória do navegador. O Excel original não é alterado.
+- Lê o Excel original diretamente no navegador.
+- Detecta cursos/planilhas, turmas, dias, horários, disciplinas e professores.
+- Permite selecionar curso e turma.
+- Visualização **Turma · semana** com drag and drop.
+- Troca de duas aulas de mesma duração ao soltar um card sobre outro.
+- Bloqueio de movimentos que atravessam o intervalo entre horários.
+- Validação inicial de conflito de professor em todas as turmas importadas.
+- Visualização **Todas as turmas · dia**.
+- Visualização **Todas as turmas · semana**.
+- Geração de PDF semanal de uma turma, inspirado nos relatórios institucionais de ensalamento.
+- Desfazer a última movimentação e restaurar a turma.
+- Opção de movimentação sem drag and drop no painel de detalhes.
 
-## Dados da planilha fornecida
+> Nesta etapa as alterações ficam somente na sessão do navegador. Banco de dados e sincronização multiusuário ficam para versões posteriores.
 
-A leitura inicial considera as planilhas visíveis do arquivo de 2026.2. No arquivo atual foram identificadas:
+## Executar
 
-- Administração: 8 turmas / 80 blocos de aula.
-- Engenharia de Alimentos: 10 turmas / 116 blocos de aula.
-- Engenharia de Computação: 10 turmas / 100 blocos de aula.
-- Engenharia de Controle e Automação: 10 turmas / 102 blocos de aula.
-
-Total: **38 turmas e 398 blocos de aula**.
-
-Observações longas de disciplinas eletivas são preservadas separadamente e não viram cards arrastáveis.
-
-## Rodar no VS Code
-
-Requisitos: Node.js 18+ e npm.
-
-```bash
+```powershell
 npm install
 npm run dev
 ```
 
-O Vite exibirá um endereço local, normalmente `http://localhost:5173`.
+Abra o endereço informado pelo Vite, normalmente:
 
-## Build
-
-```bash
-npm run build
-npm run preview
+```text
+http://localhost:5173
 ```
+
+## Atualizando da v0.1.0
+
+A v0.2.0 adiciona a dependência `jspdf`. Depois de substituir os arquivos, execute novamente:
+
+```powershell
+npm install
+```
+
+Isso também atualizará/criará o `package-lock.json` no seu computador.
+
+## Uso
+
+### Editar uma turma
+
+1. Escolha o curso.
+2. Escolha a turma.
+3. Mantenha `Visualização = Turma · semana`.
+4. Arraste um card para um horário vazio ou para outra aula de duração equivalente.
+5. Caso o arraste do navegador esteja indisponível, clique na aula e utilize `Mover aula selecionada`.
+
+### Ver todas as aulas de um dia
+
+1. Escolha o curso.
+2. Mude `Visualização` para `Todas as turmas · dia`.
+3. Escolha o dia.
+
+### Ver todas as turmas da semana
+
+Mude `Visualização` para `Todas as turmas · semana`.
+
+### Gerar PDF
+
+1. Selecione a turma.
+2. Informe uma data na semana desejada.
+3. Clique em `Gerar PDF da turma`.
+
+Na visão semanal geral também existe um botão `PDF` em cada turma.
+
+O PDF usa os dados disponíveis no Excel atual. Campos de sala/laboratório serão exibidos automaticamente quando esse dado fizer parte do modelo de cada aula em uma etapa futura.
 
 ## Estrutura
 
@@ -63,20 +87,24 @@ ensalamento-demo/
 ├── src/
 │   ├── excelParser.js
 │   ├── main.js
+│   ├── pdfGenerator.js
 │   └── styles.css
 ├── docs/
 │   └── VERSIONAMENTO.md
 ├── CHANGELOG.md
+├── README.md
 ├── package.json
-└── README.md
+└── index.html
 ```
 
-## Próximos passos sugeridos
+## Versionamento sugerido
 
-1. Exportar as alterações para JSON/Excel.
-2. Criar visualização por professor, além da visualização por turma.
-3. Adicionar salas e conflitos de sala.
-4. Persistir alterações em banco.
-5. Adicionar atualização em tempo real entre usuários.
-6. Introduzir autenticação e permissões.
-7. Adicionar motor de otimização automática em uma etapa posterior.
+```powershell
+git status
+git add .
+git commit -m "feat: add day/week views, fix drag-and-drop and export weekly PDF"
+git push origin main
+
+git tag -a v0.2.0 -m "Day/week views, drag-and-drop fix and weekly PDF"
+git push origin v0.2.0
+```

@@ -1,9 +1,13 @@
 import './styles.css';
 import { parseScheduleWorkbook } from './excelParser.js';
+import { generateClassWeekPdf } from './pdfGenerator.js';
 
 const DEFAULT_FILE = '/data/Horario Azul - Faculdade - 2026.2.xls';
 const FALLBACK_FILE = '/data/horario-fallback.json';
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.2.0';
+const VIEW_CLASS_WEEK = 'class-week';
+const VIEW_COURSE_DAY = 'course-day';
+const VIEW_COURSE_WEEK = 'course-week';
 
 const app = document.querySelector('#app');
 
@@ -13,7 +17,7 @@ app.innerHTML = `
       <div>
         <p class="eyebrow">PROTÓTIPO ACADÊMICO · v${APP_VERSION}</p>
         <h1>Ensalamento 2026.2</h1>
-        <p class="subtitle">Grade importada diretamente do Excel, com edição por arrastar e soltar.</p>
+        <p class="subtitle">Grade importada diretamente do Excel, com visualização diária/semanal, edição por arrastar e soltar e PDF da turma.</p>
       </div>
       <label class="file-button">
         <span>Carregar outro Excel</span>
@@ -30,7 +34,24 @@ app.innerHTML = `
         <span>Turma</span>
         <select id="classSelect"></select>
       </label>
+      <label>
+        <span>Visualização</span>
+        <select id="viewModeSelect">
+          <option value="${VIEW_CLASS_WEEK}">Turma · semana</option>
+          <option value="${VIEW_COURSE_DAY}">Todas as turmas · dia</option>
+          <option value="${VIEW_COURSE_WEEK}">Todas as turmas · semana</option>
+        </select>
+      </label>
+      <label id="dayFilterLabel" hidden>
+        <span>Dia</span>
+        <select id="daySelect"></select>
+      </label>
+      <label>
+        <span>Semana do PDF</span>
+        <input id="weekDateInput" class="date-input" type="date" />
+      </label>
       <div class="toolbar-actions">
+        <button id="pdfButton" class="button primary" type="button">Gerar PDF da turma</button>
         <button id="undoButton" class="button secondary" type="button" disabled>Desfazer</button>
         <button id="resetButton" class="button secondary" type="button">Restaurar turma</button>
       </div>
@@ -49,7 +70,7 @@ app.innerHTML = `
           <h2 id="scheduleTitle">Carregando grade…</h2>
           <p id="scheduleMeta">Aguarde a leitura da planilha.</p>
         </div>
-        <div class="legend">
+        <div id="legend" class="legend">
           <span><i class="legend-dot normal"></i>Aula</span>
           <span><i class="legend-dot changed"></i>Alterada</span>
         </div>
@@ -57,18 +78,24 @@ app.innerHTML = `
       <div id="scheduleScroll" class="schedule-scroll">
         <div id="scheduleGrid" class="schedule-grid" aria-live="polite"></div>
       </div>
+      <div id="overviewContainer" class="overview-container" hidden></div>
       <div id="notesArea" class="notes-area" hidden></div>
     </section>
 
     <section class="bottom-grid">
       <article class="panel details-panel">
-        <h2>Detalhes</h2>
+        <h2>Detalhes / movimentação</h2>
         <div id="lessonDetails" class="details-empty">Clique em uma aula para ver os detalhes.</div>
+        <div id="manualMove" class="manual-move" hidden>
+          <label><span>Dia de destino</span><select id="manualDay"></select></label>
+          <label><span>Início</span><select id="manualSlot"></select></label>
+          <button id="manualMoveButton" class="button secondary" type="button">Mover aula selecionada</button>
+        </div>
       </article>
       <article class="panel activity-panel">
         <h2>Validação</h2>
         <div id="statusMessage" class="status-message info">Nenhuma alteração realizada.</div>
-        <p class="hint">Ao mover uma aula, o protótipo verifica sobreposição do professor em todas as turmas importadas.</p>
+        <p class="hint">O arraste aceita áreas vazias e também cards ocupados. Ao trocar aulas, são validados duração, intervalo e conflito de professor em todas as turmas importadas.</p>
       </article>
     </section>
   </main>
@@ -78,6 +105,11 @@ const els = {
   fileInput: document.querySelector('#fileInput'),
   courseSelect: document.querySelector('#courseSelect'),
   classSelect: document.querySelector('#classSelect'),
+  viewModeSelect: document.querySelector('#viewModeSelect'),
+  dayFilterLabel: document.querySelector('#dayFilterLabel'),
+  daySelect: document.querySelector('#daySelect'),
+  weekDateInput: document.querySelector('#weekDateInput'),
+  pdfButton: document.querySelector('#pdfButton'),
   undoButton: document.querySelector('#undoButton'),
   resetButton: document.querySelector('#resetButton'),
   statFile: document.querySelector('#statFile'),
@@ -86,9 +118,16 @@ const els = {
   statChanges: document.querySelector('#statChanges'),
   scheduleTitle: document.querySelector('#scheduleTitle'),
   scheduleMeta: document.querySelector('#scheduleMeta'),
+  legend: document.querySelector('#legend'),
+  scheduleScroll: document.querySelector('#scheduleScroll'),
   scheduleGrid: document.querySelector('#scheduleGrid'),
+  overviewContainer: document.querySelector('#overviewContainer'),
   notesArea: document.querySelector('#notesArea'),
   lessonDetails: document.querySelector('#lessonDetails'),
+  manualMove: document.querySelector('#manualMove'),
+  manualDay: document.querySelector('#manualDay'),
+  manualSlot: document.querySelector('#manualSlot'),
+  manualMoveButton: document.querySelector('#manualMoveButton'),
   statusMessage: document.querySelector('#statusMessage'),
 };
 
@@ -96,6 +135,8 @@ let dataset = null;
 let selectedCourseId = null;
 let selectedClassId = null;
 let selectedLessonId = null;
+let selectedOverviewDay = 'Segunda-feira';
+let viewMode = VIEW_CLASS_WEEK;
 let dragLessonId = null;
 let undoStack = [];
 
@@ -110,6 +151,31 @@ const toMinutes = (hhmm) => {
   const [hour, minute] = hhmm.split(':').map(Number);
   return (hour * 60) + minute;
 };
+
+function nextMondayIso() {
+  const now = new Date();
+  const utc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const day = utc.getUTCDay();
+  const daysUntilMonday = day === 1 ? 0 : (8 - day) % 7;
+  utc.setUTCDate(utc.getUTCDate() + daysUntilMonday);
+  return `${utc.getUTCFullYear()}-${String(utc.getUTCMonth() + 1).padStart(2, '0')}-${String(utc.getUTCDate()).padStart(2, '0')}`;
+}
+
+function normalizeDataset(data) {
+  data.courses.forEach((course) => {
+    course.classes.forEach((classItem) => {
+      classItem.entries.forEach((entry) => {
+        entry.courseId = entry.courseId ?? course.id;
+        entry.classId = entry.classId ?? classItem.id;
+        entry.className = entry.className ?? classItem.name;
+        entry.originalDay = entry.originalDay ?? entry.day;
+        entry.originalStartSlot = entry.originalStartSlot ?? entry.startSlot;
+      });
+      classItem.notes = classItem.notes ?? [];
+    });
+  });
+  return data;
+}
 
 function professorKeys(value) {
   const normalized = normalizeKey(value);
@@ -156,6 +222,14 @@ function getEntryInterval(entry, day = entry.day, startSlot = entry.startSlot) {
     end: toMinutes(last.end),
     label: `${first.start}–${last.end}`,
   };
+}
+
+function isContiguousSpan(classItem, startSlot, span) {
+  if (startSlot < 0 || startSlot + span > classItem.slots.length) return false;
+  for (let index = startSlot; index < startSlot + span - 1; index += 1) {
+    if (classItem.slots[index].end !== classItem.slots[index + 1].start) return false;
+  }
+  return true;
 }
 
 function rangesOverlap(a, b) {
@@ -207,10 +281,7 @@ function sortClasses(classes) {
 
 function populateSelectors(preferredCourse = null, preferredClass = null) {
   els.courseSelect.innerHTML = '';
-  dataset.courses.forEach((course) => {
-    const option = new Option(course.name, course.id);
-    els.courseSelect.add(option);
-  });
+  dataset.courses.forEach((course) => els.courseSelect.add(new Option(course.name, course.id)));
 
   const defaultCourse = preferredCourse
     ?? dataset.courses.find((course) => normalizeKey(course.name).includes('computacao'))?.id
@@ -233,7 +304,17 @@ function populateClassSelector(preferredClass = null) {
   selectedClassId = classes.some((classItem) => classItem.id === defaultClass) ? defaultClass : classes[0]?.id;
   els.classSelect.value = selectedClassId ?? '';
   selectedLessonId = null;
+  populateDaySelector();
   render();
+}
+
+function populateDaySelector() {
+  const course = getCourse();
+  const days = [...new Set((course?.classes ?? []).flatMap((classItem) => classItem.days))];
+  els.daySelect.innerHTML = '';
+  days.forEach((day) => els.daySelect.add(new Option(day, day)));
+  if (!days.includes(selectedOverviewDay)) selectedOverviewDay = days[0] ?? 'Segunda-feira';
+  els.daySelect.value = selectedOverviewDay;
 }
 
 function cardColor(professor) {
@@ -256,10 +337,20 @@ function entryAt(classItem, day, startSlot, span, ignoredId = null) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 function showLessonDetails(entry) {
   if (!entry) {
     els.lessonDetails.className = 'details-empty';
     els.lessonDetails.textContent = 'Clique em uma aula para ver os detalhes.';
+    els.manualMove.hidden = true;
     return;
   }
 
@@ -275,18 +366,55 @@ function showLessonDetails(entry) {
       <div><dt>Estado</dt><dd>${isChanged(entry) ? 'Alterada nesta sessão' : 'Original da planilha'}</dd></div>
     </dl>
   `;
+
+  const classItem = getClassById(entry.classId);
+  els.manualDay.innerHTML = '';
+  classItem.days.forEach((day) => els.manualDay.add(new Option(day, day)));
+  els.manualDay.value = entry.day;
+  els.manualSlot.innerHTML = '';
+  classItem.slots.forEach((slot, index) => {
+    if (isContiguousSpan(classItem, index, entry.span)) {
+      const last = classItem.slots[index + entry.span - 1];
+      els.manualSlot.add(new Option(`${slot.start}–${last.end}`, String(index)));
+    }
+  });
+  els.manualSlot.value = String(entry.startSlot);
+  els.manualMove.hidden = false;
 }
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+function clearDragTargets() {
+  document.querySelectorAll('.drop-cell.is-over, .lesson-card.is-drop-target').forEach((element) => {
+    element.classList.remove('is-over', 'is-drop-target');
+  });
 }
 
-function createLessonCard(entry, dayIndex) {
+function canDrop(entry, classItem, slotIndex) {
+  return Boolean(entry && classItem && isContiguousSpan(classItem, slotIndex, entry.span));
+}
+
+function bindDropTarget(element, day, slotIndex, classItem) {
+  element.addEventListener('dragover', (event) => {
+    const entry = getEntry(dragLessonId);
+    if (!canDrop(entry, classItem, slotIndex)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    clearDragTargets();
+    element.classList.add(element.classList.contains('lesson-card') ? 'is-drop-target' : 'is-over');
+  });
+
+  element.addEventListener('drop', (event) => {
+    const entry = getEntry(dragLessonId);
+    if (!canDrop(entry, classItem, slotIndex)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearDragTargets();
+    const entryId = event.dataTransfer.getData('text/plain') || dragLessonId;
+    moveEntry(entryId, day, slotIndex);
+  });
+}
+
+function createLessonCard(entry, dayIndex, classItem) {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = `lesson-card ${cardColor(entry.professor)}${isChanged(entry) ? ' is-changed' : ''}${selectedLessonId === entry.id ? ' is-selected' : ''}`;
@@ -300,6 +428,7 @@ function createLessonCard(entry, dayIndex) {
   `;
 
   card.addEventListener('click', () => {
+    if (dragLessonId) return;
     selectedLessonId = entry.id;
     renderSchedule();
     showLessonDetails(entry);
@@ -307,17 +436,21 @@ function createLessonCard(entry, dayIndex) {
 
   card.addEventListener('dragstart', (event) => {
     dragLessonId = entry.id;
+    selectedLessonId = entry.id;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', entry.id);
-    requestAnimationFrame(() => card.classList.add('is-dragging'));
+    try { event.dataTransfer.setDragImage(card, Math.min(40, card.offsetWidth / 2), 24); } catch { /* navegador sem suporte */ }
+    window.setTimeout(() => card.classList.add('is-dragging'), 0);
+    showLessonDetails(entry);
   });
 
   card.addEventListener('dragend', () => {
-    dragLessonId = null;
     card.classList.remove('is-dragging');
-    document.querySelectorAll('.drop-cell.is-over').forEach((cell) => cell.classList.remove('is-over'));
+    clearDragTargets();
+    window.setTimeout(() => { dragLessonId = null; }, 0);
   });
 
+  bindDropTarget(card, entry.day, entry.startSlot, classItem);
   return card;
 }
 
@@ -331,7 +464,7 @@ function renderSchedule() {
   const days = classItem.days;
   const slots = classItem.slots;
   els.scheduleTitle.textContent = `${getCourse().name} · ${classItem.name}`;
-  els.scheduleMeta.textContent = `${slots.length} horários · ${classItem.entries.length} blocos de aula · arraste um card para outro horário`;
+  els.scheduleMeta.textContent = `${slots.length} horários · ${classItem.entries.length} blocos · arraste para área vazia ou sobre outra aula para trocar`;
 
   els.scheduleGrid.innerHTML = '';
   els.scheduleGrid.style.setProperty('--day-count', String(days.length));
@@ -368,29 +501,14 @@ function renderSchedule() {
       cell.dataset.slot = String(slotIndex);
       cell.style.gridColumn = String(dayIndex + 2);
       cell.style.gridRow = String(slotIndex + 2);
-
-      cell.addEventListener('dragover', (event) => {
-        const entry = getEntry(dragLessonId);
-        if (!entry || slotIndex + entry.span > slots.length) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
-        cell.classList.add('is-over');
-      });
-      cell.addEventListener('dragleave', () => cell.classList.remove('is-over'));
-      cell.addEventListener('drop', (event) => {
-        event.preventDefault();
-        cell.classList.remove('is-over');
-        const entryId = event.dataTransfer.getData('text/plain') || dragLessonId;
-        moveEntry(entryId, day, slotIndex);
-      });
-
+      bindDropTarget(cell, day, slotIndex, classItem);
       els.scheduleGrid.append(cell);
     });
   });
 
   classItem.entries.forEach((entry) => {
     const dayIndex = days.indexOf(entry.day);
-    if (dayIndex >= 0) els.scheduleGrid.append(createLessonCard(entry, dayIndex));
+    if (dayIndex >= 0) els.scheduleGrid.append(createLessonCard(entry, dayIndex, classItem));
   });
 
   if (classItem.notes.length) {
@@ -404,12 +522,155 @@ function renderSchedule() {
   showLessonDetails(getEntry(selectedLessonId));
 }
 
+function createOverviewLesson(entry, classItem) {
+  const interval = getEntryInterval(entry);
+  const article = document.createElement('article');
+  article.className = `overview-lesson ${isChanged(entry) ? 'is-changed' : ''}`;
+  article.innerHTML = `
+    <strong>${escapeHtml(interval?.label ?? '')}</strong>
+    <span>${escapeHtml(entry.subject)}</span>
+    <small>${escapeHtml(entry.professor)}</small>
+  `;
+  article.addEventListener('click', () => {
+    selectedClassId = classItem.id;
+    els.classSelect.value = classItem.id;
+    selectedLessonId = entry.id;
+    viewMode = VIEW_CLASS_WEEK;
+    els.viewModeSelect.value = viewMode;
+    updateViewControls();
+    render();
+  });
+  return article;
+}
+
+function renderCourseDayOverview() {
+  const course = getCourse();
+  const classes = sortClasses(course?.classes ?? []);
+  els.scheduleTitle.textContent = `${course.name} · ${selectedOverviewDay}`;
+  const total = classes.reduce((count, classItem) => count + classItem.entries.filter((entry) => entry.day === selectedOverviewDay).length, 0);
+  els.scheduleMeta.textContent = `${total} blocos de aula em ${classes.length} turmas · clique em uma aula para abrir a turma`;
+  els.overviewContainer.innerHTML = '';
+
+  classes.forEach((classItem) => {
+    const lessons = classItem.entries
+      .filter((entry) => entry.day === selectedOverviewDay)
+      .sort((a, b) => a.startSlot - b.startSlot);
+    const panel = document.createElement('section');
+    panel.className = 'day-class-panel';
+    const heading = document.createElement('div');
+    heading.className = 'day-class-heading';
+    heading.innerHTML = `<strong>${escapeHtml(classItem.name)}</strong><span>${lessons.length} bloco${lessons.length === 1 ? '' : 's'}</span>`;
+    panel.append(heading);
+    const body = document.createElement('div');
+    body.className = 'day-class-lessons';
+    if (!lessons.length) {
+      body.innerHTML = '<p class="overview-empty">Sem aulas neste dia.</p>';
+    } else {
+      lessons.forEach((entry) => body.append(createOverviewLesson(entry, classItem)));
+    }
+    panel.append(body);
+    els.overviewContainer.append(panel);
+  });
+}
+
+function renderMiniSchedule(classItem) {
+  const wrapper = document.createElement('section');
+  wrapper.className = 'mini-schedule-card';
+  const top = document.createElement('div');
+  top.className = 'mini-schedule-heading';
+  const title = document.createElement('strong');
+  title.textContent = classItem.name;
+  const pdf = document.createElement('button');
+  pdf.type = 'button';
+  pdf.className = 'mini-pdf-button';
+  pdf.textContent = 'PDF';
+  pdf.addEventListener('click', () => generatePdfForClass(classItem));
+  top.append(title, pdf);
+  wrapper.append(top);
+
+  const grid = document.createElement('div');
+  grid.className = 'mini-schedule-grid';
+  grid.style.setProperty('--mini-day-count', String(classItem.days.length));
+  grid.style.setProperty('--mini-slot-count', String(classItem.slots.length));
+
+  const corner = document.createElement('div');
+  corner.className = 'mini-corner';
+  corner.textContent = 'Hor.';
+  grid.append(corner);
+  classItem.days.forEach((day) => {
+    const header = document.createElement('div');
+    header.className = 'mini-day';
+    header.textContent = day.replace('-feira', '');
+    grid.append(header);
+  });
+
+  classItem.slots.forEach((slot, slotIndex) => {
+    const time = document.createElement('div');
+    time.className = 'mini-time';
+    time.textContent = slot.start;
+    time.style.gridColumn = '1';
+    time.style.gridRow = String(slotIndex + 2);
+    grid.append(time);
+    classItem.days.forEach((day, dayIndex) => {
+      const cell = document.createElement('div');
+      cell.className = 'mini-cell';
+      cell.style.gridColumn = String(dayIndex + 2);
+      cell.style.gridRow = String(slotIndex + 2);
+      grid.append(cell);
+    });
+  });
+
+  classItem.entries.forEach((entry) => {
+    const dayIndex = classItem.days.indexOf(entry.day);
+    if (dayIndex < 0) return;
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `mini-entry ${isChanged(entry) ? 'is-changed' : ''}`;
+    card.style.gridColumn = String(dayIndex + 2);
+    card.style.gridRow = `${entry.startSlot + 2} / span ${entry.span}`;
+    card.innerHTML = `<strong>${escapeHtml(entry.subject)}</strong><span>${escapeHtml(entry.professor)}</span>`;
+    card.addEventListener('click', () => {
+      selectedClassId = classItem.id;
+      els.classSelect.value = classItem.id;
+      selectedLessonId = entry.id;
+      viewMode = VIEW_CLASS_WEEK;
+      els.viewModeSelect.value = viewMode;
+      updateViewControls();
+      render();
+    });
+    grid.append(card);
+  });
+
+  wrapper.append(grid);
+  return wrapper;
+}
+
+function renderCourseWeekOverview() {
+  const course = getCourse();
+  const classes = sortClasses(course?.classes ?? []);
+  els.scheduleTitle.textContent = `${course.name} · visão semanal de todas as turmas`;
+  els.scheduleMeta.textContent = `${classes.length} turmas · os botões PDF geram a semana da turma correspondente`;
+  els.overviewContainer.innerHTML = '';
+  els.overviewContainer.className = 'overview-container week-overview';
+  classes.forEach((classItem) => els.overviewContainer.append(renderMiniSchedule(classItem)));
+}
+
+function updateViewControls() {
+  const isClassWeek = viewMode === VIEW_CLASS_WEEK;
+  els.dayFilterLabel.hidden = viewMode !== VIEW_COURSE_DAY;
+  els.scheduleScroll.hidden = !isClassWeek;
+  els.overviewContainer.hidden = isClassWeek;
+  els.legend.hidden = !isClassWeek;
+  els.manualMove.hidden = !isClassWeek || !selectedLessonId;
+  els.undoButton.disabled = !isClassWeek || undoStack.length === 0;
+}
+
 function moveEntry(entryId, newDay, newStartSlot) {
   const entry = getEntry(entryId);
   const classItem = getClassById(entry?.classId);
   if (!entry || !classItem) return;
-  if (newStartSlot + entry.span > classItem.slots.length) {
-    setStatus('Esse bloco não cabe no final da grade.', 'error');
+  if (!isContiguousSpan(classItem, newStartSlot, entry.span)) {
+    setStatus('Destino inválido: o bloco atravessaria um intervalo ou não cabe no final da grade.', 'error');
     return;
   }
   if (entry.day === newDay && entry.startSlot === newStartSlot) return;
@@ -421,7 +682,7 @@ function moveEntry(entryId, newDay, newStartSlot) {
     if (occupied.length === 1 && occupied[0].startSlot === newStartSlot && occupied[0].span === entry.span) {
       swapEntry = occupied[0];
     } else {
-      setStatus('Destino ocupado por um bloco com duração diferente. Nesta versão, a troca só ocorre entre blocos equivalentes.', 'error');
+      setStatus('Destino ocupado por um bloco com duração diferente. A troca só ocorre entre blocos equivalentes.', 'error');
       return;
     }
   }
@@ -439,6 +700,10 @@ function moveEntry(entryId, newDay, newStartSlot) {
   let swapPrevious = null;
 
   if (swapEntry) {
+    if (!isContiguousSpan(classItem, previous.startSlot, swapEntry.span)) {
+      setStatus('Troca bloqueada: o segundo bloco não cabe no horário de origem.', 'error');
+      return;
+    }
     const swapConflicts = findProfessorConflicts(swapEntry, previous.day, previous.startSlot, [entry.id]);
     if (swapConflicts.length) {
       const conflict = swapConflicts[0];
@@ -449,15 +714,10 @@ function moveEntry(entryId, newDay, newStartSlot) {
     swapPrevious = { day: swapEntry.day, startSlot: swapEntry.startSlot };
   }
 
-  undoStack.push({
-    entryId: entry.id,
-    previous,
-    swapEntryId: swapEntry?.id ?? null,
-    swapPrevious,
-  });
-
+  undoStack.push({ entryId: entry.id, previous, swapEntryId: swapEntry?.id ?? null, swapPrevious });
   entry.day = newDay;
   entry.startSlot = newStartSlot;
+
   if (swapEntry) {
     swapEntry.day = previous.day;
     swapEntry.startSlot = previous.startSlot;
@@ -497,8 +757,37 @@ function resetCurrentClass() {
   render();
 }
 
+function generatePdfForClass(classItem = getClass()) {
+  const course = dataset?.courses.find((item) => item.classes.some((candidate) => candidate.id === classItem?.id)) ?? getCourse();
+  if (!course || !classItem) return;
+  try {
+    const filename = generateClassWeekPdf({
+      course,
+      classItem,
+      weekDate: els.weekDateInput.value,
+      sourceName: dataset.source,
+    });
+    setStatus(`PDF gerado: ${filename}`, 'success');
+  } catch (error) {
+    console.error(error);
+    setStatus(`Não foi possível gerar o PDF: ${error.message}`, 'error');
+  }
+}
+
 function render() {
-  renderSchedule();
+  updateViewControls();
+  els.overviewContainer.className = 'overview-container';
+  if (viewMode === VIEW_CLASS_WEEK) {
+    renderSchedule();
+  } else if (viewMode === VIEW_COURSE_DAY) {
+    els.notesArea.hidden = true;
+    showLessonDetails(null);
+    renderCourseDayOverview();
+  } else {
+    els.notesArea.hidden = true;
+    showLessonDetails(null);
+    renderCourseWeekOverview();
+  }
   updateStats();
 }
 
@@ -508,31 +797,35 @@ async function loadDefaultWorkbook() {
     const response = await fetch(DEFAULT_FILE);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const buffer = await response.arrayBuffer();
-    dataset = parseScheduleWorkbook(buffer, 'Horario Azul - Faculdade - 2026.2.xls');
+    dataset = normalizeDataset(parseScheduleWorkbook(buffer, 'Horario Azul - Faculdade - 2026.2.xls'));
     setStatus('Excel carregado. As alterações ficam apenas nesta sessão.', 'success');
   } catch (error) {
     console.error('Falha ao ler XLS, usando fallback JSON:', error);
     const response = await fetch(FALLBACK_FILE);
-    dataset = await response.json();
+    dataset = normalizeDataset(await response.json());
     setStatus('A planilha não pôde ser lida pelo navegador; dados normalizados de contingência foram carregados.', 'warning');
   }
   undoStack = [];
   populateSelectors();
-  updateStats();
 }
 
-async function loadUserFile(file) {
+async function loadUploadedWorkbook(file) {
   try {
     setStatus(`Lendo ${file.name}…`, 'info');
     const buffer = await file.arrayBuffer();
-    dataset = parseScheduleWorkbook(buffer, file.name);
+    const previousCourseName = getCourse()?.name;
+    const previousClassName = getClass()?.name;
+    dataset = normalizeDataset(parseScheduleWorkbook(buffer, file.name));
     undoStack = [];
-    selectedLessonId = null;
-    populateSelectors();
-    setStatus(`${file.name} carregado com sucesso.`, 'success');
+    const matchingCourse = dataset.courses.find((course) => course.name === previousCourseName)?.id;
+    const matchingClass = dataset.courses
+      .flatMap((course) => course.classes)
+      .find((classItem) => classItem.name === previousClassName)?.id;
+    populateSelectors(matchingCourse, matchingClass);
+    setStatus(`${file.name} importado com sucesso.`, 'success');
   } catch (error) {
     console.error(error);
-    setStatus(error.message || 'Não foi possível ler o arquivo.', 'error');
+    setStatus(`Não foi possível importar o arquivo: ${error.message}`, 'error');
   }
 }
 
@@ -547,13 +840,31 @@ els.classSelect.addEventListener('change', () => {
   render();
 });
 
-els.fileInput.addEventListener('change', () => {
-  const [file] = els.fileInput.files;
-  if (file) loadUserFile(file);
-  els.fileInput.value = '';
+els.viewModeSelect.addEventListener('change', () => {
+  viewMode = els.viewModeSelect.value;
+  selectedLessonId = null;
+  updateViewControls();
+  render();
+});
+
+els.daySelect.addEventListener('change', () => {
+  selectedOverviewDay = els.daySelect.value;
+  render();
+});
+
+els.fileInput.addEventListener('change', (event) => {
+  const [file] = event.target.files ?? [];
+  if (file) loadUploadedWorkbook(file);
+  event.target.value = '';
 });
 
 els.undoButton.addEventListener('click', undo);
 els.resetButton.addEventListener('click', resetCurrentClass);
+els.pdfButton.addEventListener('click', () => generatePdfForClass());
+els.manualMoveButton.addEventListener('click', () => {
+  if (!selectedLessonId) return;
+  moveEntry(selectedLessonId, els.manualDay.value, Number(els.manualSlot.value));
+});
 
+els.weekDateInput.value = nextMondayIso();
 loadDefaultWorkbook();
