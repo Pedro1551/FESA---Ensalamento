@@ -4,7 +4,7 @@ import { generateClassWeekPdf, generateCourseWeekPdf } from './pdfGenerator.js';
 
 const DEFAULT_FILE = '/data/Horario Azul - Faculdade - 2026.2.xls';
 const FALLBACK_FILE = '/data/horario-fallback.json';
-const APP_VERSION = '0.2.4';
+const APP_VERSION = '0.3.0';
 const VIEW_CLASS_WEEK = 'class-week';
 const VIEW_COURSE_DAY = 'course-day';
 const VIEW_COURSE_WEEK = 'course-week';
@@ -51,7 +51,8 @@ app.innerHTML = `
         <input id="weekDateInput" class="date-input" type="date" />
       </label>
       <div class="toolbar-actions">
-        <button id="coursePdfButton" class="button primary" type="button">Imprimir semana / PDF</button>
+        <button id="newLessonButton" class="button primary" type="button">+ Nova aula</button>
+        <button id="coursePdfButton" class="button secondary" type="button">Imprimir semana / PDF</button>
         <button id="pdfButton" class="button secondary" type="button">Imprimir turma / PDF</button>
         <button id="undoButton" class="button secondary" type="button" disabled>Desfazer</button>
         <button id="resetButton" class="button secondary" type="button">Restaurar turma</button>
@@ -74,6 +75,7 @@ app.innerHTML = `
         <div id="legend" class="legend">
           <span><i class="legend-dot tone-sample tone-1"></i>Cores por professor</span>
           <span><i class="legend-dot changed"></i>Alterada</span>
+          <span><i class="legend-dot added"></i>Adicionada</span>
         </div>
       </div>
       <div id="scheduleScroll" class="schedule-scroll">
@@ -92,14 +94,46 @@ app.innerHTML = `
           <label><span>Início</span><select id="manualSlot"></select></label>
           <button id="manualMoveButton" class="button secondary" type="button">Mover aula selecionada</button>
         </div>
+        <div id="lessonActions" class="lesson-actions" hidden>
+          <button id="editLessonButton" class="button secondary" type="button">Editar aula</button>
+          <button id="cancelLessonButton" class="button danger" type="button">Cancelar aula</button>
+        </div>
       </article>
       <article class="panel activity-panel">
         <h2>Validação</h2>
         <div id="statusMessage" class="status-message info">Nenhuma alteração realizada.</div>
-        <p class="hint">O arraste aceita áreas vazias e também cards ocupados. Ao trocar aulas, são validados duração, intervalo e conflito de professor em todas as turmas importadas.</p>
+        <div id="activityLog" class="activity-log"><p class="activity-empty">As alterações desta sessão aparecerão aqui.</p></div>
+        <p class="hint">O Excel é a grade-base. Alterações, novas aulas e cancelamentos são aplicados sobre esse estado nesta sessão e refletidos automaticamente nas visões e na impressão.</p>
       </article>
     </section>
   </main>
+
+  <div id="lessonModal" class="modal-backdrop" hidden>
+    <section class="lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lessonModalTitle">
+      <form id="lessonForm">
+        <div class="modal-header">
+          <div>
+            <p class="modal-eyebrow" id="lessonModalContext">Turma</p>
+            <h2 id="lessonModalTitle">Nova aula</h2>
+          </div>
+          <button id="closeLessonModal" class="icon-button" type="button" aria-label="Fechar">×</button>
+        </div>
+        <div class="lesson-form-grid">
+          <label class="field field-wide"><span>Disciplina</span><input id="lessonSubject" type="text" required maxlength="160" /></label>
+          <label class="field"><span>Professor</span><input id="lessonProfessor" type="text" required maxlength="120" /></label>
+          <label class="field"><span>Sala / laboratório <small>(opcional)</small></span><input id="lessonRoom" type="text" maxlength="80" /></label>
+          <label class="field"><span>Dia</span><select id="lessonDay" required></select></label>
+          <label class="field"><span>Início</span><select id="lessonStart" required></select></label>
+          <label class="field"><span>Fim</span><select id="lessonEnd" required></select></label>
+        </div>
+        <div id="lessonFormMessage" class="form-message" hidden></div>
+        <div class="modal-actions">
+          <button id="dismissLessonModal" class="button secondary" type="button">Cancelar</button>
+          <button class="button primary" type="submit">Salvar aula</button>
+        </div>
+      </form>
+    </section>
+  </div>
 `;
 
 const els = {
@@ -110,6 +144,7 @@ const els = {
   dayFilterLabel: document.querySelector('#dayFilterLabel'),
   daySelect: document.querySelector('#daySelect'),
   weekDateInput: document.querySelector('#weekDateInput'),
+  newLessonButton: document.querySelector('#newLessonButton'),
   coursePdfButton: document.querySelector('#coursePdfButton'),
   pdfButton: document.querySelector('#pdfButton'),
   undoButton: document.querySelector('#undoButton'),
@@ -130,7 +165,24 @@ const els = {
   manualDay: document.querySelector('#manualDay'),
   manualSlot: document.querySelector('#manualSlot'),
   manualMoveButton: document.querySelector('#manualMoveButton'),
+  lessonActions: document.querySelector('#lessonActions'),
+  editLessonButton: document.querySelector('#editLessonButton'),
+  cancelLessonButton: document.querySelector('#cancelLessonButton'),
   statusMessage: document.querySelector('#statusMessage'),
+  activityLog: document.querySelector('#activityLog'),
+  lessonModal: document.querySelector('#lessonModal'),
+  lessonForm: document.querySelector('#lessonForm'),
+  lessonModalContext: document.querySelector('#lessonModalContext'),
+  lessonModalTitle: document.querySelector('#lessonModalTitle'),
+  closeLessonModal: document.querySelector('#closeLessonModal'),
+  dismissLessonModal: document.querySelector('#dismissLessonModal'),
+  lessonSubject: document.querySelector('#lessonSubject'),
+  lessonProfessor: document.querySelector('#lessonProfessor'),
+  lessonRoom: document.querySelector('#lessonRoom'),
+  lessonDay: document.querySelector('#lessonDay'),
+  lessonStart: document.querySelector('#lessonStart'),
+  lessonEnd: document.querySelector('#lessonEnd'),
+  lessonFormMessage: document.querySelector('#lessonFormMessage'),
 };
 
 let dataset = null;
@@ -141,6 +193,9 @@ let selectedOverviewDay = 'Segunda-feira';
 let viewMode = VIEW_CLASS_WEEK;
 let dragLessonId = null;
 let undoStack = [];
+let activityLog = [];
+let editingLessonId = null;
+let manualEntrySequence = 0;
 
 const normalizeKey = (value) => String(value ?? '')
   .normalize('NFD')
@@ -170,8 +225,14 @@ function normalizeDataset(data) {
         entry.courseId = entry.courseId ?? course.id;
         entry.classId = entry.classId ?? classItem.id;
         entry.className = entry.className ?? classItem.name;
+        entry.origin = entry.origin ?? 'imported';
+        entry.status = entry.status ?? 'active';
         entry.originalDay = entry.originalDay ?? entry.day;
         entry.originalStartSlot = entry.originalStartSlot ?? entry.startSlot;
+        entry.originalSpan = entry.originalSpan ?? entry.span;
+        entry.originalSubject = entry.originalSubject ?? entry.subject;
+        entry.originalProfessor = entry.originalProfessor ?? entry.professor;
+        entry.originalRoom = entry.originalRoom ?? (entry.room || entry.local || entry.location || '');
       });
       classItem.notes = classItem.notes ?? [];
     });
@@ -192,8 +253,9 @@ function allClasses() {
   return dataset?.courses.flatMap((course) => course.classes) ?? [];
 }
 
-function allEntries() {
-  return allClasses().flatMap((classItem) => classItem.entries);
+function allEntries({ includeCancelled = true } = {}) {
+  const entries = allClasses().flatMap((classItem) => classItem.entries);
+  return includeCancelled ? entries : entries.filter((entry) => entry.status !== 'cancelled');
 }
 
 function getCourse() {
@@ -245,7 +307,7 @@ function findProfessorConflicts(entry, day, startSlot, excludedIds = []) {
   if (!sourceProfessors.length) return [];
   const excluded = new Set([entry.id, ...excludedIds]);
 
-  return allEntries().filter((other) => {
+  return allEntries({ includeCancelled: false }).filter((other) => {
     if (excluded.has(other.id)) return false;
     const commonProfessor = professorKeys(other.professor).some((key) => sourceProfessors.includes(key));
     if (!commonProfessor || other.day !== day) return false;
@@ -259,8 +321,63 @@ function setStatus(message, type = 'info') {
   els.statusMessage.textContent = message;
 }
 
+function renderActivityLog() {
+  if (!activityLog.length) {
+    els.activityLog.innerHTML = '<p class="activity-empty">As alterações desta sessão aparecerão aqui.</p>';
+    return;
+  }
+
+  els.activityLog.innerHTML = activityLog.slice(0, 8).map((item) => `
+    <article class="activity-item">
+      <span>${escapeHtml(item.time)}</span>
+      <p>${escapeHtml(item.message)}</p>
+    </article>
+  `).join('');
+}
+
+function logActivity(message) {
+  activityLog.unshift({
+    message,
+    time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+  });
+  renderActivityLog();
+}
+
+function snapshotEntry(entry) {
+  return {
+    subject: entry.subject,
+    professor: entry.professor,
+    room: entry.room || '',
+    day: entry.day,
+    startSlot: entry.startSlot,
+    span: entry.span,
+    status: entry.status,
+  };
+}
+
+function isImportedModified(entry) {
+  if (!entry || entry.origin === 'manual' || entry.status === 'cancelled') return false;
+  const currentRoom = entry.room || entry.local || entry.location || '';
+  return entry.day !== entry.originalDay
+    || entry.startSlot !== entry.originalStartSlot
+    || entry.span !== entry.originalSpan
+    || entry.subject !== entry.originalSubject
+    || entry.professor !== entry.originalProfessor
+    || currentRoom !== entry.originalRoom;
+}
+
+function isChanged(entry) {
+  return Boolean(entry && (entry.origin === 'manual' || entry.status === 'cancelled' || isImportedModified(entry)));
+}
+
+function entryStateClass(entry) {
+  if (entry?.origin === 'manual') return 'is-new';
+  if (isImportedModified(entry)) return 'is-changed';
+  return '';
+}
+
 function countChanges() {
-  return allEntries().filter((entry) => entry.day !== entry.originalDay || entry.startSlot !== entry.originalStartSlot).length;
+  return allEntries().filter(isChanged).length;
 }
 
 function updateStats() {
@@ -268,7 +385,7 @@ function updateStats() {
   els.statFile.textContent = dataset.source;
   els.statFile.title = dataset.source;
   els.statClasses.textContent = String(allClasses().length);
-  els.statLessons.textContent = String(allEntries().length);
+  els.statLessons.textContent = String(allEntries({ includeCancelled: false }).length);
   els.statChanges.textContent = String(countChanges());
   els.undoButton.disabled = undoStack.length === 0;
 }
@@ -326,14 +443,11 @@ function cardColor(professor) {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function isChanged(entry) {
-  return entry.day !== entry.originalDay || entry.startSlot !== entry.originalStartSlot;
-}
 
 function entryAt(classItem, day, startSlot, span, ignoredId = null) {
   const endSlot = startSlot + span;
   return classItem.entries.filter((entry) => {
-    if (entry.id === ignoredId || entry.day !== day) return false;
+    if (entry.status === 'cancelled' || entry.id === ignoredId || entry.day !== day) return false;
     const otherEnd = entry.startSlot + entry.span;
     return entry.startSlot < endSlot && startSlot < otherEnd;
   });
@@ -349,14 +463,20 @@ function escapeHtml(value) {
 }
 
 function showLessonDetails(entry) {
-  if (!entry) {
+  if (!entry || entry.status === 'cancelled') {
     els.lessonDetails.className = 'details-empty';
     els.lessonDetails.textContent = 'Clique em uma aula para ver os detalhes.';
     els.manualMove.hidden = true;
+    els.lessonActions.hidden = true;
     return;
   }
 
   const interval = getEntryInterval(entry);
+  const stateLabel = entry.origin === 'manual'
+    ? 'Adicionada nesta sessão'
+    : (isImportedModified(entry) ? 'Alterada nesta sessão' : 'Original da planilha');
+  const room = entry.room || entry.local || entry.location || '—';
+
   els.lessonDetails.className = 'lesson-details';
   els.lessonDetails.innerHTML = `
     <dl>
@@ -365,7 +485,8 @@ function showLessonDetails(entry) {
       <div><dt>Turma</dt><dd>${escapeHtml(entry.className)}</dd></div>
       <div><dt>Dia</dt><dd>${escapeHtml(entry.day)}</dd></div>
       <div><dt>Horário</dt><dd>${escapeHtml(interval?.label ?? '—')}</dd></div>
-      <div><dt>Estado</dt><dd>${isChanged(entry) ? 'Alterada nesta sessão' : 'Original da planilha'}</dd></div>
+      <div><dt>Sala / laboratório</dt><dd>${escapeHtml(room)}</dd></div>
+      <div><dt>Estado</dt><dd>${escapeHtml(stateLabel)}</dd></div>
     </dl>
   `;
 
@@ -382,6 +503,7 @@ function showLessonDetails(entry) {
   });
   els.manualSlot.value = String(entry.startSlot);
   els.manualMove.hidden = false;
+  els.lessonActions.hidden = false;
 }
 
 function clearDragTargets() {
@@ -419,14 +541,18 @@ function bindDropTarget(element, day, slotIndex, classItem) {
 function createLessonCard(entry, dayIndex, classItem) {
   const card = document.createElement('button');
   card.type = 'button';
-  card.className = `lesson-card ${cardColor(entry.professor)}${isChanged(entry) ? ' is-changed' : ''}${selectedLessonId === entry.id ? ' is-selected' : ''}`;
+  const stateClass = entryStateClass(entry);
+  card.className = `lesson-card ${cardColor(entry.professor)}${stateClass ? ` ${stateClass}` : ''}${selectedLessonId === entry.id ? ' is-selected' : ''}`;
   card.style.gridColumn = String(dayIndex + 2);
   card.style.gridRow = `${entry.startSlot + 2} / span ${entry.span}`;
   card.draggable = true;
   card.dataset.entryId = entry.id;
+  const room = entry.room || entry.local || entry.location || '';
   card.innerHTML = `
+    ${entry.origin === 'manual' ? '<span class="lesson-badge">NOVA</span>' : ''}
     <span class="lesson-subject">${escapeHtml(entry.subject)}</span>
     <span class="lesson-professor">${escapeHtml(entry.professor)}</span>
+    ${room ? `<span class="lesson-room-inline">${escapeHtml(room)}</span>` : ''}
   `;
 
   card.addEventListener('click', () => {
@@ -466,7 +592,8 @@ function renderSchedule() {
   const days = classItem.days;
   const slots = classItem.slots;
   els.scheduleTitle.textContent = `${getCourse().name} · ${classItem.name}`;
-  els.scheduleMeta.textContent = `${slots.length} horários · ${classItem.entries.length} blocos · arraste para área vazia ou sobre outra aula para trocar`;
+  const activeEntries = classItem.entries.filter((entry) => entry.status !== 'cancelled');
+  els.scheduleMeta.textContent = `${slots.length} horários · ${activeEntries.length} blocos ativos · arraste para área vazia ou sobre outra aula para trocar`; 
 
   els.scheduleGrid.innerHTML = '';
   els.scheduleGrid.style.setProperty('--day-count', String(days.length));
@@ -508,7 +635,7 @@ function renderSchedule() {
     });
   });
 
-  classItem.entries.forEach((entry) => {
+  activeEntries.forEach((entry) => {
     const dayIndex = days.indexOf(entry.day);
     if (dayIndex >= 0) els.scheduleGrid.append(createLessonCard(entry, dayIndex, classItem));
   });
@@ -527,7 +654,7 @@ function renderSchedule() {
 function createOverviewLesson(entry, classItem) {
   const interval = getEntryInterval(entry);
   const article = document.createElement('article');
-  article.className = `overview-lesson ${cardColor(entry.professor)} ${isChanged(entry) ? 'is-changed' : ''}`;
+  article.className = `overview-lesson ${cardColor(entry.professor)} ${entryStateClass(entry)}`;
   article.innerHTML = `
     <strong>${escapeHtml(interval?.label ?? '')}</strong>
     <span>${escapeHtml(entry.subject)}</span>
@@ -549,13 +676,13 @@ function renderCourseDayOverview() {
   const course = getCourse();
   const classes = sortClasses(course?.classes ?? []);
   els.scheduleTitle.textContent = `${course.name} · ${selectedOverviewDay}`;
-  const total = classes.reduce((count, classItem) => count + classItem.entries.filter((entry) => entry.day === selectedOverviewDay).length, 0);
+  const total = classes.reduce((count, classItem) => count + classItem.entries.filter((entry) => entry.status !== 'cancelled' && entry.day === selectedOverviewDay).length, 0);
   els.scheduleMeta.textContent = `${total} blocos de aula em ${classes.length} turmas · clique em uma aula para abrir a turma`;
   els.overviewContainer.innerHTML = '';
 
   classes.forEach((classItem) => {
     const lessons = classItem.entries
-      .filter((entry) => entry.day === selectedOverviewDay)
+      .filter((entry) => entry.status !== 'cancelled' && entry.day === selectedOverviewDay)
       .sort((a, b) => a.startSlot - b.startSlot);
     const panel = document.createElement('section');
     panel.className = 'day-class-panel';
@@ -585,7 +712,7 @@ function renderMiniSchedule(classItem) {
   const title = document.createElement('strong');
   title.textContent = classItem.name;
   const meta = document.createElement('span');
-  meta.textContent = `${classItem.entries.length} blocos de aula`;
+  meta.textContent = `${classItem.entries.filter((entry) => entry.status !== 'cancelled').length} blocos de aula`;
   titleWrap.append(title, meta);
   const pdf = document.createElement('button');
   pdf.type = 'button';
@@ -627,12 +754,12 @@ function renderMiniSchedule(classItem) {
     });
   });
 
-  classItem.entries.forEach((entry) => {
+  classItem.entries.filter((entry) => entry.status !== 'cancelled').forEach((entry) => {
     const dayIndex = classItem.days.indexOf(entry.day);
     if (dayIndex < 0) return;
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = `mini-entry ${cardColor(entry.professor)} ${isChanged(entry) ? 'is-changed' : ''}`;
+    card.className = `mini-entry ${cardColor(entry.professor)} ${entryStateClass(entry)}`;
     card.style.gridColumn = String(dayIndex + 2);
     card.style.gridRow = `${entry.startSlot + 2} / span ${entry.span}`;
     card.innerHTML = `<strong>${escapeHtml(entry.subject)}</strong><span>${escapeHtml(entry.professor)}</span>`;
@@ -669,13 +796,184 @@ function updateViewControls() {
   els.overviewContainer.hidden = isClassWeek;
   els.legend.hidden = !isClassWeek;
   els.manualMove.hidden = !isClassWeek || !selectedLessonId;
-  els.undoButton.disabled = !isClassWeek || undoStack.length === 0;
+  els.lessonActions.hidden = !isClassWeek || !selectedLessonId;
+  els.undoButton.disabled = undoStack.length === 0;
+}
+
+function setLessonFormMessage(message = '', type = 'error') {
+  if (!message) {
+    els.lessonFormMessage.hidden = true;
+    els.lessonFormMessage.textContent = '';
+    return;
+  }
+  els.lessonFormMessage.hidden = false;
+  els.lessonFormMessage.className = `form-message ${type}`;
+  els.lessonFormMessage.textContent = message;
+}
+
+function populateLessonEndOptions(preferredSpan = null) {
+  const classItem = getClass();
+  const startSlot = Number(els.lessonStart.value);
+  els.lessonEnd.innerHTML = '';
+  if (!classItem || !Number.isInteger(startSlot) || !classItem.slots[startSlot]) return;
+
+  for (let endIndex = startSlot; endIndex < classItem.slots.length; endIndex += 1) {
+    if (endIndex > startSlot && classItem.slots[endIndex - 1].end !== classItem.slots[endIndex].start) break;
+    const span = endIndex - startSlot + 1;
+    const label = `${classItem.slots[endIndex].end} · ${span} horário${span === 1 ? '' : 's'}`;
+    els.lessonEnd.add(new Option(label, String(span)));
+  }
+
+  if (preferredSpan && [...els.lessonEnd.options].some((option) => Number(option.value) === preferredSpan)) {
+    els.lessonEnd.value = String(preferredSpan);
+  }
+}
+
+function openLessonModal(entry = null) {
+  const classItem = getClass();
+  if (!classItem) return;
+  editingLessonId = entry?.id ?? null;
+  els.lessonModalContext.textContent = `${getCourse().name} · ${classItem.name}`;
+  els.lessonModalTitle.textContent = entry ? 'Editar aula' : 'Nova aula';
+  els.lessonSubject.value = entry?.subject ?? '';
+  els.lessonProfessor.value = entry?.professor ?? '';
+  els.lessonRoom.value = entry?.room || entry?.local || entry?.location || '';
+
+  els.lessonDay.innerHTML = '';
+  classItem.days.forEach((day) => els.lessonDay.add(new Option(day, day)));
+  els.lessonDay.value = entry?.day ?? classItem.days[0] ?? '';
+
+  els.lessonStart.innerHTML = '';
+  classItem.slots.forEach((slot, index) => els.lessonStart.add(new Option(slot.start, String(index))));
+  els.lessonStart.value = String(entry?.startSlot ?? 0);
+  populateLessonEndOptions(entry?.span ?? 1);
+  setLessonFormMessage();
+  els.lessonModal.hidden = false;
+  document.body.classList.add('modal-open');
+  window.setTimeout(() => els.lessonSubject.focus(), 0);
+}
+
+function closeLessonModal() {
+  els.lessonModal.hidden = true;
+  document.body.classList.remove('modal-open');
+  editingLessonId = null;
+  setLessonFormMessage();
+}
+
+function placementError(entry, day, startSlot, span, ignoredId = null) {
+  const classItem = getClassById(entry.classId);
+  if (!classItem || !isContiguousSpan(classItem, startSlot, span)) {
+    return 'O horário selecionado atravessa um intervalo ou ultrapassa o fim da grade.';
+  }
+
+  const occupied = entryAt(classItem, day, startSlot, span, ignoredId);
+  if (occupied.length) {
+    const target = occupied[0];
+    const interval = getEntryInterval(target);
+    return `A turma já possui ${target.subject} nesse período (${interval?.label ?? 'horário sobreposto'}).`;
+  }
+
+  const conflicts = findProfessorConflicts({ ...entry, span }, day, startSlot, ignoredId ? [ignoredId] : []);
+  if (conflicts.length) {
+    const conflict = conflicts[0];
+    const interval = getEntryInterval(conflict);
+    return `${entry.professor} já possui ${conflict.subject} em ${conflict.className}, ${conflict.day} (${interval?.label ?? 'horário sobreposto'}).`;
+  }
+
+  return null;
+}
+
+function saveLessonFromForm(event) {
+  event.preventDefault();
+  const classItem = getClass();
+  const course = getCourse();
+  if (!classItem || !course) return;
+
+  const subject = els.lessonSubject.value.trim();
+  const professor = els.lessonProfessor.value.trim();
+  const room = els.lessonRoom.value.trim();
+  const day = els.lessonDay.value;
+  const startSlot = Number(els.lessonStart.value);
+  const span = Number(els.lessonEnd.value);
+
+  if (!subject || !professor || !day || !Number.isInteger(startSlot) || !Number.isInteger(span) || span < 1) {
+    setLessonFormMessage('Preencha disciplina, professor, dia, início e fim.');
+    return;
+  }
+
+  if (editingLessonId) {
+    const entry = getEntry(editingLessonId);
+    if (!entry) return;
+    const candidate = { ...entry, subject, professor, room, day, startSlot, span };
+    const error = placementError(candidate, day, startSlot, span, entry.id);
+    if (error) {
+      setLessonFormMessage(error);
+      return;
+    }
+
+    undoStack.push({ type: 'edit', entryId: entry.id, previous: snapshotEntry(entry) });
+    Object.assign(entry, { subject, professor, room, day, startSlot, span, status: 'active' });
+    selectedLessonId = entry.id;
+    const interval = getEntryInterval(entry);
+    const message = `${entry.subject} atualizada para ${entry.day}, ${interval?.label ?? ''}.`;
+    logActivity(message);
+    setStatus(message, 'success');
+  } else {
+    const entry = {
+      id: `manual-${Date.now()}-${manualEntrySequence += 1}`,
+      courseId: course.id,
+      classId: classItem.id,
+      className: classItem.name,
+      subject,
+      professor,
+      room,
+      day,
+      startSlot,
+      span,
+      origin: 'manual',
+      status: 'active',
+      originalDay: null,
+      originalStartSlot: null,
+      originalSpan: null,
+      originalSubject: null,
+      originalProfessor: null,
+      originalRoom: null,
+    };
+    const error = placementError(entry, day, startSlot, span);
+    if (error) {
+      setLessonFormMessage(error);
+      return;
+    }
+
+    classItem.entries.push(entry);
+    undoStack.push({ type: 'create', classId: classItem.id, entryId: entry.id });
+    selectedLessonId = entry.id;
+    const interval = getEntryInterval(entry);
+    const message = `Nova aula adicionada: ${entry.subject} · ${entry.day}, ${interval?.label ?? ''}.`;
+    logActivity(message);
+    setStatus(message, 'success');
+  }
+
+  closeLessonModal();
+  render();
+}
+
+function cancelSelectedLesson() {
+  const entry = getEntry(selectedLessonId);
+  if (!entry || entry.status === 'cancelled') return;
+  undoStack.push({ type: 'cancel', entryId: entry.id, previousStatus: entry.status });
+  entry.status = 'cancelled';
+  const message = `${entry.subject} cancelada da grade efetiva.`;
+  logActivity(message);
+  setStatus(message, 'warning');
+  selectedLessonId = null;
+  render();
 }
 
 function moveEntry(entryId, newDay, newStartSlot) {
   const entry = getEntry(entryId);
   const classItem = getClassById(entry?.classId);
-  if (!entry || !classItem) return;
+  if (!entry || !classItem || entry.status === 'cancelled') return;
   if (!isContiguousSpan(classItem, newStartSlot, entry.span)) {
     setStatus('Destino inválido: o bloco atravessaria um intervalo ou não cabe no final da grade.', 'error');
     return;
@@ -721,17 +1019,21 @@ function moveEntry(entryId, newDay, newStartSlot) {
     swapPrevious = { day: swapEntry.day, startSlot: swapEntry.startSlot };
   }
 
-  undoStack.push({ entryId: entry.id, previous, swapEntryId: swapEntry?.id ?? null, swapPrevious });
+  undoStack.push({ type: 'move', entryId: entry.id, previous, swapEntryId: swapEntry?.id ?? null, swapPrevious });
   entry.day = newDay;
   entry.startSlot = newStartSlot;
 
   if (swapEntry) {
     swapEntry.day = previous.day;
     swapEntry.startSlot = previous.startSlot;
-    setStatus(`Troca realizada: ${entry.subject} ↔ ${swapEntry.subject}.`, 'success');
+    const message = `Troca realizada: ${entry.subject} ↔ ${swapEntry.subject}.`;
+    logActivity(message);
+    setStatus(message, 'success');
   } else {
     const interval = getEntryInterval(entry);
-    setStatus(`${entry.subject} movida para ${newDay}, ${interval?.label ?? ''}.`, 'success');
+    const message = `${entry.subject} movida para ${newDay}, ${interval?.label ?? ''}.`;
+    logActivity(message);
+    setStatus(message, 'success');
   }
 
   selectedLessonId = entry.id;
@@ -741,12 +1043,27 @@ function moveEntry(entryId, newDay, newStartSlot) {
 function undo() {
   const action = undoStack.pop();
   if (!action) return;
-  const entry = getEntry(action.entryId);
-  if (entry) Object.assign(entry, action.previous);
-  if (action.swapEntryId && action.swapPrevious) {
-    const swapEntry = getEntry(action.swapEntryId);
-    if (swapEntry) Object.assign(swapEntry, action.swapPrevious);
+
+  if (action.type === 'move' || !action.type) {
+    const entry = getEntry(action.entryId);
+    if (entry) Object.assign(entry, action.previous);
+    if (action.swapEntryId && action.swapPrevious) {
+      const swapEntry = getEntry(action.swapEntryId);
+      if (swapEntry) Object.assign(swapEntry, action.swapPrevious);
+    }
+  } else if (action.type === 'create') {
+    const classItem = getClassById(action.classId);
+    if (classItem) classItem.entries = classItem.entries.filter((entry) => entry.id !== action.entryId);
+    if (selectedLessonId === action.entryId) selectedLessonId = null;
+  } else if (action.type === 'edit') {
+    const entry = getEntry(action.entryId);
+    if (entry) Object.assign(entry, action.previous);
+  } else if (action.type === 'cancel') {
+    const entry = getEntry(action.entryId);
+    if (entry) entry.status = action.previousStatus ?? 'active';
   }
+
+  logActivity('Última alteração desfeita.');
   setStatus('Última alteração desfeita.', 'info');
   render();
 }
@@ -754,13 +1071,26 @@ function undo() {
 function resetCurrentClass() {
   const classItem = getClass();
   if (!classItem) return;
+
+  classItem.entries = classItem.entries.filter((entry) => entry.origin !== 'manual');
   classItem.entries.forEach((entry) => {
     entry.day = entry.originalDay;
     entry.startSlot = entry.originalStartSlot;
+    entry.span = entry.originalSpan;
+    entry.subject = entry.originalSubject;
+    entry.professor = entry.originalProfessor;
+    entry.room = entry.originalRoom || '';
+    entry.status = 'active';
   });
-  undoStack = undoStack.filter((action) => getEntry(action.entryId)?.classId !== classItem.id);
+
+  undoStack = undoStack.filter((action) => {
+    const entry = getEntry(action.entryId);
+    return entry && entry.classId !== classItem.id;
+  });
   selectedLessonId = null;
-  setStatus(`${classItem.name} restaurada para a posição original da planilha.`, 'info');
+  const message = `${classItem.name} restaurada para a grade-base importada do Excel.`;
+  logActivity(message);
+  setStatus(message, 'info');
   render();
 }
 
@@ -829,6 +1159,8 @@ async function loadDefaultWorkbook() {
     setStatus('A planilha não pôde ser lida pelo navegador; dados normalizados de contingência foram carregados.', 'warning');
   }
   undoStack = [];
+  activityLog = [];
+  renderActivityLog();
   populateSelectors();
 }
 
@@ -840,6 +1172,8 @@ async function loadUploadedWorkbook(file) {
     const previousClassName = getClass()?.name;
     dataset = normalizeDataset(parseScheduleWorkbook(buffer, file.name));
     undoStack = [];
+    activityLog = [];
+    renderActivityLog();
     const matchingCourse = dataset.courses.find((course) => course.name === previousCourseName)?.id;
     const matchingClass = dataset.courses
       .flatMap((course) => course.classes)
@@ -881,6 +1215,7 @@ els.fileInput.addEventListener('change', (event) => {
   event.target.value = '';
 });
 
+els.newLessonButton.addEventListener('click', () => openLessonModal());
 els.undoButton.addEventListener('click', undo);
 els.resetButton.addEventListener('click', resetCurrentClass);
 els.coursePdfButton.addEventListener('click', () => generatePdfForCourse());
@@ -889,6 +1224,22 @@ els.manualMoveButton.addEventListener('click', () => {
   if (!selectedLessonId) return;
   moveEntry(selectedLessonId, els.manualDay.value, Number(els.manualSlot.value));
 });
+els.editLessonButton.addEventListener('click', () => {
+  const entry = getEntry(selectedLessonId);
+  if (entry) openLessonModal(entry);
+});
+els.cancelLessonButton.addEventListener('click', cancelSelectedLesson);
+els.lessonStart.addEventListener('change', () => populateLessonEndOptions());
+els.lessonForm.addEventListener('submit', saveLessonFromForm);
+els.closeLessonModal.addEventListener('click', closeLessonModal);
+els.dismissLessonModal.addEventListener('click', closeLessonModal);
+els.lessonModal.addEventListener('click', (event) => {
+  if (event.target === els.lessonModal) closeLessonModal();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !els.lessonModal.hidden) closeLessonModal();
+});
 
 els.weekDateInput.value = nextMondayIso();
+renderActivityLog();
 loadDefaultWorkbook();

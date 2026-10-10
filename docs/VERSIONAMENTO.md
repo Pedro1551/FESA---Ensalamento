@@ -45,24 +45,21 @@ refactor: isolate PDF generation module
 
 - `0.1.0`: importação do Excel + primeira grade com drag-and-drop.
 - `0.2.0`: correção do drag-and-drop + visões diária/semanal + PDF semanal por turma.
-- `0.2.1`: visão semanal com uma turma por linha + PDF semanal geral do curso.
-- `0.2.2`: padronização UI/UX das grades e aplicação das cores por professor também nos PDFs.
-- `0.2.4`: relatórios semanais via impressão nativa do navegador, com opção Salvar como PDF.
-- `0.3.0`: salas/laboratórios, conflitos de recursos e filtros mais completos.
-- `0.4.0`: persistência/backend e colaboração multiusuário.
+- `0.3.0`: edição dinâmica da grade, novas aulas, alteração de duração, cancelamento e histórico local.
+- `0.4.0`: salas/laboratórios, conflitos de recursos e regras de ensalamento.
+- `0.5.0`: persistência/backend e colaboração multiusuário.
 - `1.0.0`: primeira versão estável para uso institucional.
 
-## Publicar a v0.2.5
+## Publicar a v0.3.0
 
-Depois de copiar os arquivos da nova versão:
+Depois de copiar os arquivos da nova versão e testar:
 
 ```powershell
-npm install
 git status
 git add .
-git commit -m "refactor: use browser printing for weekly PDF reports"
+git commit -m "feat: add dynamic lesson creation and schedule editing"
 git push origin main
 
-git tag -a v0.2.5 -m "Browser print based weekly reports"
-git push origin v0.2.5
+git tag -a v0.3.0 -m "Dynamic schedule editing and lesson management"
+git push origin v0.3.0
 ```

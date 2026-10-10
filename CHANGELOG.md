@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0] - 2026-10-09
+
+### Adicionado
+- Cadastro manual de novas aulas na turma selecionada.
+- Edição de disciplina, professor, sala/laboratório, dia, horário inicial e duração.
+- Cancelamento lógico de aulas, preservando a grade-base importada.
+- Histórico local das alterações realizadas durante a sessão.
+- Desfazer para criação, edição, cancelamento e movimentação de aulas.
+- Estado visual específico para aulas adicionadas manualmente.
+
+### Melhorado
+- A grade efetiva agora é calculada sobre a grade-base do Excel, permitindo alterações sem perder a referência original.
+- Cards se redimensionam automaticamente de acordo com o início e fim escolhidos.
+- Visões diária, semanal e impressão passam a refletir novas aulas, edições e cancelamentos automaticamente.
+- Restauração da turma remove aulas manuais e recupera disciplina, professor, horário e duração originais.
+- Validação de conflito da turma e de professor também é aplicada ao cadastro e à edição manual.
+
+### Observação
+- Nesta versão as alterações ainda vivem somente na sessão do navegador; persistência em banco será implementada posteriormente.
+
 ## [0.2.7] - 2026-10-09
 
 ### Melhorado

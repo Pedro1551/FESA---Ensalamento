@@ -4,7 +4,7 @@ Protótipo em JavaScript para visualização e edição do horário acadêmico a
 
 ## Versão atual
 
-`v0.2.7`
+`v0.3.0`
 
 ## Funcionalidades atuais
 
@@ -15,9 +15,52 @@ Protótipo em JavaScript para visualização e edição do horário acadêmico a
 - Visualização de todas as turmas por dia e por semana.
 - Padronização visual com cartões em tons pastéis por professor.
 - Aulas alteradas destacadas em amarelo.
-- Impressão de uma turma ou de todo o curso em A4 paisagem.
-- Layout de impressão modernizado para ficar visualmente próximo da grade mostrada na tela.
-- Geração de PDF através do diálogo nativo de impressão do navegador (`Salvar como PDF`).
+- Impressão de uma turma ou de todo o curso em A4 paisagem pelo diálogo nativo do navegador.
+- Cadastro manual de novas aulas sobre a grade importada.
+- Edição de disciplina, professor, sala/laboratório, dia, início e duração de uma aula.
+- Cancelamento de aulas sem destruir a grade-base importada.
+- Grade adaptativa: ao alterar início/fim ou inserir uma nova aula, o card ocupa automaticamente os horários correspondentes.
+- Histórico local das alterações feitas durante a sessão.
+- Desfazer para movimentações, novas aulas, edições e cancelamentos.
+- Restauração da turma para a grade-base original do Excel.
+- Impressão/PDF reflete automaticamente novas aulas, alterações e cancelamentos.
+
+## Conceito da v0.3.0
+
+O Excel passa a ser tratado como **grade-base**. O protótipo mantém a grade importada como referência e aplica alterações sobre ela:
+
+```text
+Excel / grade-base
+       ↓
+Alterações da sessão
+├── mover aula
+├── editar aula
+├── adicionar aula
+└── cancelar aula
+       ↓
+Grade efetiva
+├── tela semanal
+├── visão diária
+├── visão geral
+└── impressão / PDF
+```
+
+As alterações ainda são mantidas somente na sessão do navegador. Persistência em banco de dados será uma etapa posterior.
+
+## Nova aula / edição
+
+Na visão da turma, use **+ Nova aula** para cadastrar um novo bloco.
+
+Ao selecionar uma aula existente, use **Editar aula** para alterar:
+
+- disciplina;
+- professor;
+- sala/laboratório;
+- dia;
+- início;
+- fim/duração.
+
+O horário final é limitado aos slots contíguos da própria grade para evitar atravessar intervalos. Antes de salvar, o sistema verifica conflito da turma e conflito de professor nas demais turmas importadas.
 
 ## Executar
 
@@ -43,15 +86,13 @@ Escala: 100% / Padrão
 Gráficos de plano de fundo: ativado
 ```
 
-A impressão é construída com HTML e CSS, utilizando `@media print`, `@page` e CSS Grid para preservar corretamente blocos que ocupam múltiplos horários.
-
 ## Estrutura relevante
 
 ```text
 src/
 ├── excelParser.js
 ├── main.js
-├── pdfGenerator.js   # nome preservado por compatibilidade; agora gera a visualização de impressão
+├── pdfGenerator.js
 └── styles.css
 ```
 
@@ -60,9 +101,9 @@ src/
 ```powershell
 git status
 git add .
-git commit -m "style: increase print typography for readability"
+git commit -m "feat: add dynamic lesson creation and schedule editing"
 git push origin main
 
-git tag -a v0.2.7 -m "Larger print typography"
-git push origin v0.2.5
+git tag -a v0.3.0 -m "Dynamic schedule editing and lesson management"
+git push origin v0.3.0
 ```

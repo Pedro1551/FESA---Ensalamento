@@ -31,11 +31,19 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function isEntryManual(entry) {
+  return entry?.origin === 'manual';
+}
+
 function isEntryChanged(entry) {
-  return entry?.originalDay != null && (
-    entry.day !== entry.originalDay
+  if (!entry || isEntryManual(entry) || entry.originalDay == null) return false;
+  const room = entry.room || entry.local || entry.location || '';
+  return entry.day !== entry.originalDay
     || entry.startSlot !== entry.originalStartSlot
-  );
+    || entry.span !== entry.originalSpan
+    || entry.subject !== entry.originalSubject
+    || entry.professor !== entry.originalProfessor
+    || room !== (entry.originalRoom || '');
 }
 
 function entryTone(entry) {
@@ -108,11 +116,13 @@ function renderEntry(entry) {
   if (!entry) return '';
   const tone = entryTone(entry);
   const room = entry.room || entry.local || entry.location || '';
-  const changed = isEntryChanged(entry) ? '<div class="changed-label">ALTERADA</div>' : '';
+  const stateLabel = isEntryManual(entry)
+    ? '<div class="changed-label new-label">NOVA</div>'
+    : (isEntryChanged(entry) ? '<div class="changed-label">ALTERADA</div>' : '');
 
   return `
     <div class="lesson-card" style="--lesson-bg:${tone.bg};--lesson-border:${tone.border};--lesson-accent:${tone.accent}">
-      ${changed}
+      ${stateLabel}
       <div class="lesson-title">${escapeHtml(entry.subject || entry.discipline || 'Aula')}</div>
       <div class="lesson-professor">${escapeHtml(entry.professor || '')}</div>
       ${room ? `<div class="lesson-room">${escapeHtml(room)}</div>` : ''}
@@ -147,7 +157,7 @@ function renderClassTable(classItem) {
     return lessonNumber + lessonTime + dayCells;
   }).join('');
 
-  const lessons = classItem.entries.map((entry) => {
+  const lessons = classItem.entries.filter((entry) => entry.status !== 'cancelled').map((entry) => {
     const dayIndex = days.indexOf(entry.day);
     if (dayIndex < 0) return '';
 
@@ -322,6 +332,7 @@ function printStyles() {
     .lesson-title { font-size: 8pt; line-height: 1.13; font-weight: 800; color: #111827; overflow-wrap: anywhere; }
     .lesson-professor { margin-top: 0.8mm; font-size: 7pt; line-height: 1.13; color: #405064; overflow-wrap: anywhere; }
     .lesson-room { margin-top: 1mm; font-size: 7pt; font-weight: 700; color: #182536; }
+    .new-label { background: rgba(238, 242, 255, .97) !important; color: #4d5d96 !important; }
     .changed-label {
       position: absolute;
       right: 0.9mm;
