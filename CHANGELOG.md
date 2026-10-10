@@ -1,39 +1,68 @@
 # Changelog
 
+## [0.2.7] - 2026-10-09
+
+### Melhorado
+- Aumentada a tipografia da visualização de impressão/PDF.
+- Disciplinas, professores, horários, dias e títulos das turmas ganharam maior legibilidade sem alterar o layout aprovado.
+
+## [0.2.6] - 2026-10-09
+
+### Melhorado
+- Reformulado o layout de impressão para ficar visualmente mais próximo da grade exibida na página.
+- Removido o aspecto de planilha/Excel no relatório impresso, com células mais suaves e cartões arredondados.
+- Cartões de aula alinhados ao mesmo padrão visual do ensalamento exibido no navegador.
+
+## [0.2.5] - 2026-10-09
+
+### Corrigido
+- Corrigida a impressão de aulas que ocupam dois ou mais horários.
+- Substituído o uso de `rowspan` por CSS Grid na visualização de impressão, evitando deslocamento dos cards entre 11ª/12ª e 13ª/14ª aulas.
+- Mantida a mesma composição visual e as cores por professor na impressão.
+
+## [0.2.4] - 2026-10-09
+
+### Alterado
+- Substituída a geração programática com jsPDF pelo sistema nativo de impressão do navegador.
+- `Imprimir semana / PDF` abre uma visualização dedicada para impressão contendo todas as turmas do curso.
+- `Imprimir turma / PDF` gera a visualização de impressão somente da turma selecionada.
+- O usuário pode selecionar `Salvar como PDF` no Chrome/Edge para gerar o arquivo.
+- Layout de impressão em A4 paisagem com quebra controlada de páginas e duas turmas por página quando a quantidade de horários permite.
+- O relatório impresso passa a usar HTML/CSS, mantendo maior consistência com a interface do sistema.
+- Cores de professor e destaque amarelo de aulas alteradas permanecem no relatório.
+
+### Removido
+- Dependência `jspdf`.
+
+## [0.2.3] - 2026-10-09
+
+### Corrigido
+- Refinamento do layout do PDF semanal.
+- Numeração das aulas de acordo com o turno.
+
+## [0.2.2] - 2026-10-09
+
+### Melhorado
+- Padronização visual de todas as grades com o mesmo sistema de cartões em tons pastéis usado na grade editável.
+- Cores consistentes por professor nas diferentes visualizações.
+
 ## [0.2.1] - 2026-10-09
 
 ### Adicionado
-- Geração de um único PDF semanal contendo todas as turmas do curso selecionado.
-- Organização do PDF geral em duas turmas por página quando a quantidade de horários permite.
-- Botão principal `Gerar PDF semanal`, mantendo também a exportação individual por turma.
-
-### Melhorado
-- Visualização `Todas as turmas · semana` agora apresenta uma turma por linha.
-- Removidas as barras horizontais individuais da visão semanal em telas desktop; a grade utiliza toda a largura disponível.
+- Geração de um único relatório semanal contendo todas as turmas do curso selecionado.
+- Visualização semanal com uma turma por linha.
 
 ## [0.2.0] - 2026-10-09
 
 ### Adicionado
-- Visualização da turma selecionada por semana.
-- Visualização de todas as turmas do curso em um dia.
-- Visualização semanal de todas as turmas do curso.
-- Geração/download de PDF semanal para a turma selecionada.
-- Botão de PDF em cada turma na visão semanal geral.
-- Seleção da semana usada nas datas do PDF.
-- Alternativa de movimentação por seletores de dia/horário.
+- Visões diária e semanal.
+- Exportação semanal por turma.
 
 ### Corrigido
-- Drag and drop sobre aulas já ocupadas: agora o card de destino também recebe o drop e permite troca.
-- Validação de blocos que atravessariam o intervalo entre aulas.
-- Normalização de metadados quando o fallback JSON é utilizado.
-- Espaçamento/altura dos cards para reduzir sobreposição visual durante a movimentação.
+- Drag and drop sobre aulas ocupadas.
 
 ## [0.1.0] - 2026-10-07
 
 ### Adicionado
-- Importação do arquivo Excel base (.xls/.xlsx).
-- Identificação automática de cursos/planilhas e turmas.
-- Grade semanal por turma.
-- Primeira implementação de drag and drop.
-- Validação inicial de conflito de professor.
-- Desfazer e restaurar turma.
+- Importação do Excel.
+- Grade semanal e primeira implementação de drag and drop.

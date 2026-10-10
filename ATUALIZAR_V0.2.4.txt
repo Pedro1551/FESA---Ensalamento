@@ -1,0 +1,23 @@
+ENSALAMENTO FESA - ATUALIZAÇÃO v0.2.4
+
+1. Copie o conteúdo deste ZIP diretamente para a raiz do projeto atual.
+2. Confirme a substituição dos arquivos existentes.
+3. Execute:
+
+   npm install
+   npm run dev
+
+A v0.2.4 remove o jsPDF. O PDF passa a ser gerado pelo diálogo de impressão do navegador.
+Ao clicar em "Imprimir semana / PDF" ou "Imprimir turma / PDF":
+- uma página própria de impressão será aberta;
+- o diálogo de impressão do navegador aparecerá;
+- selecione "Salvar como PDF" para gerar o arquivo.
+
+Configuração recomendada:
+- Papel: A4
+- Orientação: Paisagem
+- Escala: Padrão / 100%
+- Margens: Padrão (o layout já usa @page)
+- Gráficos de plano de fundo: ativado, se o navegador disponibilizar essa opção
+
+O npm install ajustará o package-lock.json e removerá a dependência jsPDF do projeto.

@@ -1,0 +1,11 @@
+ATUALIZAÇÃO v0.2.5
+
+1. Feche o servidor Vite se estiver rodando.
+2. Copie o conteúdo deste pacote para a raiz do projeto e substitua os arquivos existentes.
+3. Execute: npm run dev
+4. Gere novamente a impressão semanal.
+
+Correção principal:
+- a impressão agora usa CSS Grid em vez de rowspan de tabela, corrigindo o deslocamento de aulas que ocupam dois horários.
+
+Não há dependências novas.

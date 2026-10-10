@@ -1,7 +1,55 @@
-import { jsPDF } from 'jspdf';
+// A partir da v0.2.4 o PDF é gerado pelo próprio diálogo de impressão do navegador.
+// Mantemos este nome de arquivo temporariamente para preservar a compatibilidade com o restante do protótipo.
 
 const DAY_ORDER = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+const PRINT_TONES = [
+  { bg: '#f3f8fc', border: '#bfd1e1', accent: '#557ea5' },
+  { bg: '#f2f9f5', border: '#bfd8ca', accent: '#5c8a73' },
+  { bg: '#fbf7f2', border: '#dccdbc', accent: '#93775d' },
+  { bg: '#f7f5fb', border: '#cdc7df', accent: '#756b99' },
+  { bg: '#fbf9f1', border: '#ddd3af', accent: '#927d40' },
+  { bg: '#f2f9fa', border: '#bdd6d8', accent: '#4f8188' },
+];
+
+function normalizeKey(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function isEntryChanged(entry) {
+  return entry?.originalDay != null && (
+    entry.day !== entry.originalDay
+    || entry.startSlot !== entry.originalStartSlot
+  );
+}
+
+function entryTone(entry) {
+  if (isEntryChanged(entry)) {
+    return { bg: '#fff9df', border: '#d5b552', accent: '#b48b19' };
+  }
+
+  let hash = 0;
+  for (const char of normalizeKey(entry?.professor)) {
+    hash = ((hash << 5) - hash) + char.charCodeAt(0);
+  }
+
+  return PRINT_TONES[Math.abs(hash) % PRINT_TONES.length];
+}
 
 function parseDateOnly(value) {
   const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -27,34 +75,305 @@ function formatDate(date) {
   return `${String(date.getUTCDate()).padStart(2, '0')}-${MONTHS_PT[date.getUTCMonth()]}-${String(date.getUTCFullYear()).slice(-2)}`;
 }
 
-function safeFilename(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[<>:"/\\|?*]+/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim();
+function lessonNumberForSlot(slot, slotIndex) {
+  const [hourText] = String(slot?.start ?? '').split(':');
+  const hour = Number(hourText);
+
+  if (Number.isFinite(hour)) {
+    if (hour >= 18) return 11 + slotIndex;
+    if (hour >= 12) return 7 + slotIndex;
+  }
+
+  return 1 + slotIndex;
 }
 
-function fitLines(doc, text, width, maxLines) {
-  const lines = doc.splitTextToSize(String(text ?? ''), Math.max(4, width));
-  if (lines.length <= maxLines) return lines;
-  const clipped = lines.slice(0, maxLines);
-  const last = String(clipped[maxLines - 1] ?? '');
-  clipped[maxLines - 1] = `${last.replace(/[.…]+$/, '').slice(0, Math.max(1, last.length - 1))}…`;
-  return clipped;
+function numericClassOrder(classItem) {
+  const match = String(classItem?.name ?? '').match(/(\d+)/);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
 }
 
-function drawCenteredLines(doc, lines, centerX, startY, lineHeight) {
-  lines.forEach((line, index) => doc.text(String(line), centerX, startY + (index * lineHeight), { align: 'center' }));
+function entryStartingAt(classItem, day, slotIndex) {
+  return classItem.entries.find((entry) => entry.day === day && entry.startSlot === slotIndex) ?? null;
 }
 
-function entryAt(classItem, day, slotIndex) {
+function entryCoveringSlot(classItem, day, slotIndex) {
   return classItem.entries.find((entry) => (
     entry.day === day
-    && slotIndex >= entry.startSlot
-    && slotIndex < entry.startSlot + entry.span
+    && entry.startSlot < slotIndex
+    && entry.startSlot + entry.span > slotIndex
   )) ?? null;
+}
+
+function renderEntry(entry) {
+  if (!entry) return '';
+  const tone = entryTone(entry);
+  const room = entry.room || entry.local || entry.location || '';
+  const changed = isEntryChanged(entry) ? '<div class="changed-label">ALTERADA</div>' : '';
+
+  return `
+    <div class="lesson-card" style="--lesson-bg:${tone.bg};--lesson-border:${tone.border};--lesson-accent:${tone.accent}">
+      ${changed}
+      <div class="lesson-title">${escapeHtml(entry.subject || entry.discipline || 'Aula')}</div>
+      <div class="lesson-professor">${escapeHtml(entry.professor || '')}</div>
+      ${room ? `<div class="lesson-room">${escapeHtml(room)}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderClassTable(classItem) {
+  const days = DAY_ORDER;
+  const slots = classItem.slots ?? [];
+  const slotCount = slots.length;
+  const rowHeight = slotCount <= 4 ? '15.2mm' : (slotCount <= 6 ? '10.4mm' : '8.8mm');
+
+  const headers = [
+    '<div class="grid-head number-head"></div>',
+    '<div class="grid-head time-head">Hor.</div>',
+    ...days.map((day) => `<div class="grid-head">${escapeHtml(day.replace('-feira', ''))}</div>`),
+  ].join('');
+
+  const baseCells = slots.map((slot, slotIndex) => {
+    const row = slotIndex + 2;
+    const lessonNumber = `<div class="lesson-number" style="grid-column:1;grid-row:${row}">${lessonNumberForSlot(slot, slotIndex)}ª</div>`;
+    const lessonTime = `
+      <div class="lesson-time" style="grid-column:2;grid-row:${row}">
+        <strong>${escapeHtml(slot.start || '')}</strong>
+        <span>${escapeHtml(slot.end || '')}</span>
+      </div>
+    `;
+    const dayCells = days.map((_, dayIndex) => (
+      `<div class="lesson-cell empty-cell" style="grid-column:${dayIndex + 3};grid-row:${row}"></div>`
+    )).join('');
+    return lessonNumber + lessonTime + dayCells;
+  }).join('');
+
+  const lessons = classItem.entries.map((entry) => {
+    const dayIndex = days.indexOf(entry.day);
+    if (dayIndex < 0) return '';
+
+    const startSlot = Math.max(0, Number(entry.startSlot) || 0);
+    if (startSlot >= slotCount) return '';
+
+    const requestedSpan = Math.max(1, Number(entry.span) || 1);
+    const span = Math.min(requestedSpan, slotCount - startSlot);
+    const row = startSlot + 2;
+    const column = dayIndex + 3;
+
+    return `
+      <div class="lesson-grid-item" style="grid-column:${column};grid-row:${row} / span ${span}">
+        ${renderEntry(entry)}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <section class="class-block">
+      <div class="class-title">${escapeHtml(classItem.name)}</div>
+      <div class="schedule-grid" style="grid-template-rows:5.5mm repeat(${slotCount}, ${rowHeight})">
+        ${headers}
+        ${baseCells}
+        ${lessons}
+      </div>
+    </section>
+  `;
+}
+
+function renderPageHeader({ weekStart, semesterLabel }) {
+  return `
+    <header class="print-header">
+      <div class="print-title">Utilização de salas/laboratórios</div>
+      <div class="semester">${escapeHtml(semesterLabel)}</div>
+      <div class="week-dates">
+        <span></span><span></span>
+        ${DAY_ORDER.map((_, index) => `<strong>${formatDate(addDays(weekStart, index))}</strong>`).join('')}
+      </div>
+    </header>
+  `;
+}
+
+function renderFooter({ course, sourceName, pageNumber, totalPages }) {
+  const generated = new Date().toLocaleString('pt-BR');
+  return `
+    <footer class="print-footer">
+      <span>${escapeHtml(course?.name || '')}${sourceName ? ` · Fonte: ${escapeHtml(sourceName)}` : ''}</span>
+      <span>${totalPages > 1 ? `Página ${pageNumber}/${totalPages} · ` : ''}Gerado em ${escapeHtml(generated)}</span>
+    </footer>
+  `;
+}
+
+function printStyles() {
+  return `
+    @page { size: A4 landscape; margin: 9mm 8mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #142033; font-family: Arial, Helvetica, sans-serif; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .print-page { min-height: 190mm; display: flex; flex-direction: column; break-after: page; page-break-after: always; }
+    .print-page:last-child { break-after: auto; page-break-after: auto; }
+    .print-header { margin-bottom: 4mm; }
+    .print-title { text-align: center; font-size: 15pt; line-height: 1.05; font-weight: 800; color: #111827; }
+    .semester { text-align: center; margin-top: 0.8mm; font-size: 9.8pt; font-weight: 700; color: #425166; }
+    .week-dates { display: grid; grid-template-columns: 10mm 16mm repeat(6, 1fr); column-gap: 1.1mm; align-items: end; margin-top: 3.2mm; font-size: 8pt; text-align: center; }
+    .week-dates strong { display: flex; align-items: center; justify-content: center; min-height: 6.5mm; padding: 0.8mm 1mm; background: #f7fafc; border: 0.3mm solid #dbe4ee; border-radius: 1.8mm; font-weight: 800; color: #0d2847; }
+
+    .class-block {
+      margin-bottom: 4.8mm;
+      border: 0.32mm solid #dbe4ee;
+      border-radius: 3mm;
+      background: #fff;
+      padding: 3mm;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      box-shadow: 0 0 0 0 rgba(0,0,0,0);
+    }
+    .class-title {
+      margin-bottom: 2.4mm;
+      padding: 0 0.4mm;
+      color: #182536;
+      font-size: 11.5pt;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .schedule-grid {
+      display: grid;
+      grid-template-columns: 10mm 16mm repeat(6, minmax(0, 1fr));
+      width: 100%;
+      gap: 1mm;
+      overflow: visible;
+      background: transparent;
+    }
+    .grid-head, .lesson-number, .lesson-time, .lesson-cell { min-width: 0; }
+    .grid-head {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 8mm;
+      padding: 0.7mm 1mm;
+      background: #f7fafc;
+      border: 0.3mm solid #dbe4ee;
+      border-radius: 1.8mm;
+      color: #111827;
+      font-size: 8.2pt;
+      font-weight: 800;
+      text-align: center;
+    }
+    .number-head, .time-head { background: transparent; border-color: transparent; }
+    .lesson-number {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100%;
+      background: #f8fafc;
+      border: 0.3mm solid #dbe4ee;
+      border-radius: 1.6mm;
+      text-align: center;
+      font-size: 7.7pt;
+      font-weight: 800;
+      color: #203041;
+    }
+    .lesson-time {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100%;
+      background: #fbfcfe;
+      border: 0.3mm solid #dbe4ee;
+      border-radius: 1.6mm;
+      text-align: center;
+      padding: 0.8mm 0.5mm;
+      font-size: 7.2pt;
+    }
+    .lesson-time strong { display: block; font-size: 7.8pt; color: #162536; }
+    .lesson-time span { display: block; margin-top: 0.4mm; color: #556474; font-size: 6.8pt; }
+    .lesson-cell {
+      min-height: 100%;
+      background: #f8fafc;
+      border: 0.3mm solid #e3eaf2;
+      border-radius: 1.8mm;
+    }
+    .empty-cell { background: #fafcff; }
+    .lesson-grid-item {
+      z-index: 2;
+      min-width: 0;
+      min-height: 0;
+      overflow: visible;
+      background: transparent;
+      border: 0;
+      padding: 0;
+    }
+    .lesson-card {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      background: var(--lesson-bg);
+      border: 0.3mm solid var(--lesson-border);
+      border-left: 1.2mm solid var(--lesson-accent);
+      border-radius: 1.8mm;
+      padding: 1.7mm 1.8mm 1.5mm 2.2mm;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .lesson-title { font-size: 8pt; line-height: 1.13; font-weight: 800; color: #111827; overflow-wrap: anywhere; }
+    .lesson-professor { margin-top: 0.8mm; font-size: 7pt; line-height: 1.13; color: #405064; overflow-wrap: anywhere; }
+    .lesson-room { margin-top: 1mm; font-size: 7pt; font-weight: 700; color: #182536; }
+    .changed-label {
+      position: absolute;
+      right: 0.9mm;
+      top: 0.8mm;
+      padding: 0.15mm 0.6mm;
+      border-radius: 999px;
+      background: rgba(255, 245, 188, .95);
+      font-size: 4.9pt;
+      font-weight: 800;
+      color: #8b6700;
+    }
+
+    .print-footer { margin-top: auto; padding-top: 2.2mm; display: flex; justify-content: space-between; gap: 6mm; color: #667587; font-size: 6.1pt; }
+    .screen-note { display: none; }
+    @media screen {
+      body { padding: 18px; background: #eef2f6; }
+      .print-page { width: 1120px; min-height: 760px; margin: 0 auto 18px; padding: 28px; background: white; box-shadow: 0 1px 10px rgba(15, 23, 42, .12); }
+      .screen-note { display: block; width: 1120px; margin: 0 auto 12px; padding: 10px 14px; border-radius: 8px; background: #fff7d6; color: #614f00; font-size: 13px; }
+    }
+  `;
+}
+
+function renderPrintableDocument({ title, pages }) {
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>${printStyles()}</style>
+</head>
+<body>
+  <div class="screen-note">Na janela de impressão, selecione <strong>Salvar como PDF</strong> se quiser gerar o arquivo PDF. Use orientação <strong>Paisagem</strong> e escala <strong>Padrão/100%</strong>.</div>
+  ${pages}
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => { window.focus(); window.print(); }, 180);
+    });
+    window.addEventListener('afterprint', () => window.close());
+  <\/script>
+</body>
+</html>`;
+}
+
+function openPrintWindow(html) {
+  const popup = window.open('', '_blank');
+  if (!popup) throw new Error('O navegador bloqueou a janela de impressão. Permita pop-ups para este site e tente novamente.');
+
+  try { popup.opener = null; } catch {}
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
 }
 
 export function generateClassWeekPdf({
@@ -64,268 +383,23 @@ export function generateClassWeekPdf({
   sourceName,
   semesterLabel = '2º Semestre/2026',
 }) {
-  if (!course || !classItem) throw new Error('Turma não selecionada para gerar o PDF.');
+  if (!course || !classItem) throw new Error('Turma não selecionada para impressão.');
 
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 12;
-  const tableX = marginX;
-  const tableWidth = pageWidth - (marginX * 2);
-  const numberWidth = 9;
-  const timeWidth = 15;
-  const dayWidth = (tableWidth - numberWidth - timeWidth) / 6;
-  const rowHeight = 18;
-  const classBarHeight = 7;
-  const headerHeight = 7;
-  const tableTop = 47;
-  const gridTop = tableTop + classBarHeight + headerHeight;
-  const days = DAY_ORDER;
   const weekStart = mondayOfWeek(weekDate);
+  const page = `
+    <section class="print-page">
+      ${renderPageHeader({ weekStart, semesterLabel })}
+      ${renderClassTable(classItem)}
+      ${renderFooter({ course, sourceName, pageNumber: 1, totalPages: 1 })}
+    </section>
+  `;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(17, 32, 51);
-  doc.setFontSize(19);
-  doc.text('CEFSA', marginX, 19);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Centro Educacional da Fundação Salvador Arena', marginX, 23);
+  openPrintWindow(renderPrintableDocument({
+    title: `${classItem.name} - semana ${formatDate(weekStart)}`,
+    pages: page,
+  }));
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text('Utilização de salas/laboratórios', pageWidth / 2, 17, { align: 'center' });
-  doc.setFontSize(10);
-  doc.text(semesterLabel, pageWidth / 2, 22, { align: 'center' });
-
-  doc.setFontSize(8.5);
-  doc.text('FACULDADE ENGENHEIRO', pageWidth - marginX, 17, { align: 'right' });
-  doc.setFontSize(10.5);
-  doc.text('SALVADOR ARENA', pageWidth - marginX, 22, { align: 'right' });
-
-  const dayStartX = tableX + numberWidth + timeWidth;
-  doc.setFontSize(9);
-  for (let i = 0; i < 6; i += 1) {
-    doc.text(formatDate(addDays(weekStart, i)), dayStartX + (i * dayWidth) + (dayWidth / 2), 35, { align: 'center' });
-  }
-
-  doc.setFillColor(8, 45, 94);
-  doc.setDrawColor(0, 0, 0);
-  doc.rect(tableX + numberWidth, tableTop, tableWidth - numberWidth, classBarHeight, 'FD');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text(classItem.name, tableX + numberWidth + ((tableWidth - numberWidth) / 2), tableTop + 5, { align: 'center' });
-
-  doc.setTextColor(17, 32, 51);
-  doc.setFillColor(220, 229, 238);
-  doc.setFontSize(8.5);
-  doc.rect(tableX, tableTop + classBarHeight, numberWidth, headerHeight, 'FD');
-  doc.rect(tableX + numberWidth, tableTop + classBarHeight, timeWidth, headerHeight, 'FD');
-  doc.text('Hor.', tableX + numberWidth + (timeWidth / 2), tableTop + classBarHeight + 5, { align: 'center' });
-  days.forEach((day, index) => {
-    const x = dayStartX + (index * dayWidth);
-    doc.rect(x, tableTop + classBarHeight, dayWidth, headerHeight, 'FD');
-    doc.text(day, x + (dayWidth / 2), tableTop + classBarHeight + 5, { align: 'center' });
-  });
-
-  classItem.slots.forEach((slot, slotIndex) => {
-    const y = gridTop + (slotIndex * rowHeight);
-    doc.setFillColor(slotIndex % 2 === 0 ? 223 : 232, slotIndex % 2 === 0 ? 235 : 241, slotIndex % 2 === 0 ? 246 : 248);
-    doc.rect(tableX, y, numberWidth, rowHeight, 'FD');
-    doc.setFillColor(230, 235, 242);
-    doc.rect(tableX + numberWidth, y, timeWidth, rowHeight, 'FD');
-
-    doc.setTextColor(17, 32, 51);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text(`${11 + slotIndex}ª`, tableX + (numberWidth / 2), y + (rowHeight / 2) + 1, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(slot.start, tableX + numberWidth + (timeWidth / 2), y + (rowHeight / 2) + 1, { align: 'center' });
-
-    for (let dayIndex = 0; dayIndex < 6; dayIndex += 1) {
-      doc.setFillColor(255, 255, 255);
-      doc.rect(dayStartX + (dayIndex * dayWidth), y, dayWidth, rowHeight, 'FD');
-    }
-  });
-
-  classItem.entries.forEach((entry) => {
-    const dayIndex = days.indexOf(entry.day);
-    if (dayIndex < 0) return;
-    const x = dayStartX + (dayIndex * dayWidth);
-    const y = gridTop + (entry.startSlot * rowHeight);
-    const height = entry.span * rowHeight;
-
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(0, 0, 0);
-    doc.rect(x, y, dayWidth, height, 'FD');
-
-    const innerWidth = dayWidth - 3;
-    let cursorY = y + 5;
-    const subjectSize = height >= 30 ? 7.7 : 6.8;
-    const professorSize = height >= 30 ? 7.1 : 6.4;
-    const maxSubjectLines = height >= 30 ? 4 : 2;
-
-    doc.setTextColor(20, 25, 32);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(subjectSize);
-    const subjectLines = fitLines(doc, entry.subject, innerWidth, maxSubjectLines);
-    drawCenteredLines(doc, subjectLines, x + (dayWidth / 2), cursorY, 3.25);
-    cursorY += subjectLines.length * 3.25 + 1.2;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(professorSize);
-    const professorLines = fitLines(doc, entry.professor, innerWidth, height >= 30 ? 2 : 1);
-    drawCenteredLines(doc, professorLines, x + (dayWidth / 2), cursorY, 3.05);
-
-    if (entry.room) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.8);
-      doc.text(String(entry.room), x + (dayWidth / 2), y + height - 2.2, { align: 'center' });
-    }
-  });
-
-  (classItem.notes ?? []).forEach((note) => {
-    const dayIndex = days.indexOf(note.day);
-    if (dayIndex < 0) return;
-    const hasEntry = classItem.entries.some((entry) => entry.day === note.day);
-    if (hasEntry) return;
-    const x = dayStartX + (dayIndex * dayWidth);
-    const y = gridTop;
-    const height = classItem.slots.length * rowHeight;
-    doc.setFillColor(255, 255, 255);
-    doc.rect(x, y, dayWidth, height, 'FD');
-    doc.setTextColor(35, 42, 52);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.7);
-    const lines = fitLines(doc, note.text, dayWidth - 3, 18);
-    doc.text(lines, x + 1.5, y + 4.5, { maxWidth: dayWidth - 3, lineHeightFactor: 1.12 });
-  });
-
-  const footerY = pageHeight - 9;
-  doc.setTextColor(70, 78, 90);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.text(`${course.name} · Fonte: ${sourceName || 'planilha importada'}`, marginX, footerY);
-  doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, pageWidth - marginX, footerY, { align: 'right' });
-
-  const filename = `${safeFilename(classItem.name)} - semana ${formatDate(weekStart)}.pdf`;
-  doc.save(filename);
-  return filename;
-}
-
-function numericClassOrder(classItem) {
-  const match = String(classItem?.name ?? '').match(/(\d+)/);
-  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
-}
-
-function drawCompactClassTable(doc, {
-  classItem,
-  tableX,
-  tableY,
-  tableWidth,
-  rowHeight,
-  days,
-}) {
-  const numberWidth = 8;
-  const timeWidth = 14;
-  const classBarHeight = 6;
-  const headerHeight = 6;
-  const dayWidth = (tableWidth - numberWidth - timeWidth) / days.length;
-  const dayStartX = tableX + numberWidth + timeWidth;
-  const gridTop = tableY + classBarHeight + headerHeight;
-
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.28);
-
-  doc.setFillColor(8, 45, 94);
-  doc.rect(tableX + numberWidth, tableY, tableWidth - numberWidth, classBarHeight, 'FD');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text(classItem.name, tableX + numberWidth + ((tableWidth - numberWidth) / 2), tableY + 4.4, { align: 'center' });
-
-  doc.setTextColor(17, 32, 51);
-  doc.setFillColor(220, 229, 238);
-  doc.setFontSize(7.2);
-  doc.rect(tableX, tableY + classBarHeight, numberWidth, headerHeight, 'FD');
-  doc.rect(tableX + numberWidth, tableY + classBarHeight, timeWidth, headerHeight, 'FD');
-  doc.text('Hor.', tableX + numberWidth + (timeWidth / 2), tableY + classBarHeight + 4.3, { align: 'center' });
-  days.forEach((day, index) => {
-    const x = dayStartX + (index * dayWidth);
-    doc.rect(x, tableY + classBarHeight, dayWidth, headerHeight, 'FD');
-    doc.text(day, x + (dayWidth / 2), tableY + classBarHeight + 4.3, { align: 'center' });
-  });
-
-  classItem.slots.forEach((slot, slotIndex) => {
-    const y = gridTop + (slotIndex * rowHeight);
-    doc.setFillColor(223, 235, 246);
-    doc.rect(tableX, y, numberWidth, rowHeight, 'FD');
-    doc.setFillColor(230, 235, 242);
-    doc.rect(tableX + numberWidth, y, timeWidth, rowHeight, 'FD');
-
-    doc.setTextColor(17, 32, 51);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.text(`${11 + slotIndex}ª`, tableX + (numberWidth / 2), y + (rowHeight / 2) + 0.8, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.8);
-    doc.text(slot.start, tableX + numberWidth + (timeWidth / 2), y + (rowHeight / 2) + 0.8, { align: 'center' });
-
-    days.forEach((day, dayIndex) => {
-      doc.setFillColor(255, 255, 255);
-      doc.rect(dayStartX + (dayIndex * dayWidth), y, dayWidth, rowHeight, 'FD');
-    });
-  });
-
-  classItem.entries.forEach((entry) => {
-    const dayIndex = days.indexOf(entry.day);
-    if (dayIndex < 0) return;
-    const x = dayStartX + (dayIndex * dayWidth);
-    const y = gridTop + (entry.startSlot * rowHeight);
-    const height = entry.span * rowHeight;
-
-    doc.setFillColor(255, 255, 255);
-    doc.rect(x, y, dayWidth, height, 'FD');
-
-    const innerWidth = dayWidth - 2.4;
-    let cursorY = y + 3.6;
-    const subjectLines = fitLines(doc, entry.subject, innerWidth, height >= 22 ? 3 : 2);
-    doc.setTextColor(20, 25, 32);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(height >= 22 ? 6.25 : 5.7);
-    drawCenteredLines(doc, subjectLines, x + (dayWidth / 2), cursorY, 2.55);
-    cursorY += subjectLines.length * 2.55 + 0.7;
-
-    const professorLines = fitLines(doc, entry.professor, innerWidth, height >= 22 ? 2 : 1);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(height >= 22 ? 5.7 : 5.2);
-    drawCenteredLines(doc, professorLines, x + (dayWidth / 2), cursorY, 2.35);
-
-    if (entry.room) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(5.7);
-      doc.text(String(entry.room), x + (dayWidth / 2), y + height - 1.6, { align: 'center' });
-    }
-  });
-
-  (classItem.notes ?? []).forEach((note) => {
-    const dayIndex = days.indexOf(note.day);
-    if (dayIndex < 0) return;
-    if (classItem.entries.some((entry) => entry.day === note.day)) return;
-    const x = dayStartX + (dayIndex * dayWidth);
-    const y = gridTop;
-    const height = classItem.slots.length * rowHeight;
-    doc.setFillColor(255, 255, 255);
-    doc.rect(x, y, dayWidth, height, 'FD');
-    doc.setTextColor(35, 42, 52);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(4.7);
-    const lines = fitLines(doc, note.text, dayWidth - 2, Math.max(8, classItem.slots.length * 4));
-    doc.text(lines, x + 1, y + 3.3, { maxWidth: dayWidth - 2, lineHeightFactor: 1.08 });
-  });
-
-  return gridTop + (classItem.slots.length * rowHeight);
+  return `${classItem.name} · semana ${formatDate(weekStart)}`;
 }
 
 export function generateCourseWeekPdf({
@@ -334,86 +408,39 @@ export function generateCourseWeekPdf({
   sourceName,
   semesterLabel = '2º Semestre/2026',
 }) {
-  if (!course?.classes?.length) throw new Error('Curso sem turmas para gerar o PDF semanal.');
+  if (!course?.classes?.length) throw new Error('Curso sem turmas para impressão semanal.');
 
   const classes = [...course.classes].sort((a, b) => {
     const numberDiff = numericClassOrder(a) - numericClassOrder(b);
     return numberDiff || String(a.name).localeCompare(String(b.name), 'pt-BR');
   });
-  const days = DAY_ORDER;
+
   const weekStart = mondayOfWeek(weekDate);
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 8;
-  const tableX = marginX;
-  const tableWidth = pageWidth - (marginX * 2);
   const maxSlots = Math.max(...classes.map((classItem) => classItem.slots.length));
-  const classesPerPage = maxSlots <= 5 ? 2 : 1;
-  const rowHeight = classesPerPage === 2 ? 13 : 18;
-  const firstTableY = 39;
-  const classTableHeight = 6 + 6 + (maxSlots * rowHeight);
-  const tableGap = 5;
-
-  const drawHeader = () => {
-    doc.setTextColor(17, 32, 51);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.text('CEFSA', marginX, 15);
-    doc.setFontSize(6.8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Centro Educacional da Fundação Salvador Arena', marginX, 19);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12.5);
-    doc.text('Utilização de salas/laboratórios', pageWidth / 2, 13.5, { align: 'center' });
-    doc.setFontSize(9.5);
-    doc.text(semesterLabel, pageWidth / 2, 18.3, { align: 'center' });
-
-    doc.setFontSize(7.2);
-    doc.text('FACULDADE ENGENHEIRO', pageWidth - marginX, 14.5, { align: 'right' });
-    doc.setFontSize(9.3);
-    doc.text('SALVADOR ARENA', pageWidth - marginX, 19, { align: 'right' });
-
-    const dayStartX = tableX + 8 + 14;
-    const dayWidth = (tableWidth - 8 - 14) / days.length;
-    doc.setFontSize(8.2);
-    days.forEach((day, index) => {
-      doc.text(formatDate(addDays(weekStart, index)), dayStartX + (index * dayWidth) + (dayWidth / 2), 31, { align: 'center' });
-    });
-  };
-
-  const drawFooter = (pageNumber, totalPages) => {
-    const footerY = pageHeight - 5.5;
-    doc.setTextColor(70, 78, 90);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.8);
-    doc.text(`${course.name} · Fonte: ${sourceName || 'planilha importada'}`, marginX, footerY);
-    doc.text(`Página ${pageNumber}/${totalPages} · Gerado em ${new Date().toLocaleString('pt-BR')}`, pageWidth - marginX, footerY, { align: 'right' });
-  };
-
+  const classesPerPage = maxSlots <= 6 ? 2 : 1;
   const totalPages = Math.ceil(classes.length / classesPerPage);
+
+  let pages = '';
   for (let pageIndex = 0; pageIndex < totalPages; pageIndex += 1) {
-    if (pageIndex > 0) doc.addPage('a4', 'landscape');
-    drawHeader();
-
     const pageClasses = classes.slice(pageIndex * classesPerPage, (pageIndex + 1) * classesPerPage);
-    pageClasses.forEach((classItem, classIndex) => {
-      const y = firstTableY + (classIndex * (classTableHeight + tableGap));
-      drawCompactClassTable(doc, {
-        classItem,
-        tableX,
-        tableY: y,
-        tableWidth,
-        rowHeight,
-        days,
-      });
-    });
-
-    drawFooter(pageIndex + 1, totalPages);
+    pages += `
+      <section class="print-page">
+        ${renderPageHeader({ weekStart, semesterLabel })}
+        ${pageClasses.map(renderClassTable).join('')}
+        ${renderFooter({
+          course,
+          sourceName,
+          pageNumber: pageIndex + 1,
+          totalPages,
+        })}
+      </section>
+    `;
   }
 
-  const filename = `${safeFilename(course.name)} - ensalamento semanal ${formatDate(weekStart)}.pdf`;
-  doc.save(filename);
-  return filename;
+  openPrintWindow(renderPrintableDocument({
+    title: `${course.name} - ensalamento semanal ${formatDate(weekStart)}`,
+    pages,
+  }));
+
+  return `${course.name} · semana ${formatDate(weekStart)}`;
 }

@@ -4,7 +4,7 @@ import { generateClassWeekPdf, generateCourseWeekPdf } from './pdfGenerator.js';
 
 const DEFAULT_FILE = '/data/Horario Azul - Faculdade - 2026.2.xls';
 const FALLBACK_FILE = '/data/horario-fallback.json';
-const APP_VERSION = '0.2.1';
+const APP_VERSION = '0.2.4';
 const VIEW_CLASS_WEEK = 'class-week';
 const VIEW_COURSE_DAY = 'course-day';
 const VIEW_COURSE_WEEK = 'course-week';
@@ -17,7 +17,7 @@ app.innerHTML = `
       <div>
         <p class="eyebrow">PROTÓTIPO ACADÊMICO · v${APP_VERSION}</p>
         <h1>Ensalamento 2026.2</h1>
-        <p class="subtitle">Grade importada diretamente do Excel, com visualização diária/semanal, edição por arrastar e soltar e relatórios PDF semanais.</p>
+        <p class="subtitle">Grade importada diretamente do Excel, com visualização diária/semanal, edição por arrastar e soltar e impressão semanal com opção de salvar em PDF.</p>
       </div>
       <label class="file-button">
         <span>Carregar outro Excel</span>
@@ -47,12 +47,12 @@ app.innerHTML = `
         <select id="daySelect"></select>
       </label>
       <label>
-        <span>Semana do PDF</span>
+        <span>Semana da impressão</span>
         <input id="weekDateInput" class="date-input" type="date" />
       </label>
       <div class="toolbar-actions">
-        <button id="coursePdfButton" class="button primary" type="button">Gerar PDF semanal</button>
-        <button id="pdfButton" class="button secondary" type="button">PDF da turma</button>
+        <button id="coursePdfButton" class="button primary" type="button">Imprimir semana / PDF</button>
+        <button id="pdfButton" class="button secondary" type="button">Imprimir turma / PDF</button>
         <button id="undoButton" class="button secondary" type="button" disabled>Desfazer</button>
         <button id="resetButton" class="button secondary" type="button">Restaurar turma</button>
       </div>
@@ -72,7 +72,7 @@ app.innerHTML = `
           <p id="scheduleMeta">Aguarde a leitura da planilha.</p>
         </div>
         <div id="legend" class="legend">
-          <span><i class="legend-dot normal"></i>Aula</span>
+          <span><i class="legend-dot tone-sample tone-1"></i>Cores por professor</span>
           <span><i class="legend-dot changed"></i>Alterada</span>
         </div>
       </div>
@@ -527,7 +527,7 @@ function renderSchedule() {
 function createOverviewLesson(entry, classItem) {
   const interval = getEntryInterval(entry);
   const article = document.createElement('article');
-  article.className = `overview-lesson ${isChanged(entry) ? 'is-changed' : ''}`;
+  article.className = `overview-lesson ${cardColor(entry.professor)} ${isChanged(entry) ? 'is-changed' : ''}`;
   article.innerHTML = `
     <strong>${escapeHtml(interval?.label ?? '')}</strong>
     <span>${escapeHtml(entry.subject)}</span>
@@ -561,7 +561,7 @@ function renderCourseDayOverview() {
     panel.className = 'day-class-panel';
     const heading = document.createElement('div');
     heading.className = 'day-class-heading';
-    heading.innerHTML = `<strong>${escapeHtml(classItem.name)}</strong><span>${lessons.length} bloco${lessons.length === 1 ? '' : 's'}</span>`;
+    heading.innerHTML = `<strong>${escapeHtml(classItem.name)}</strong><span>${lessons.length} bloco${lessons.length === 1 ? '' : 's'} no dia</span>`;
     panel.append(heading);
     const body = document.createElement('div');
     body.className = 'day-class-lessons';
@@ -580,14 +580,19 @@ function renderMiniSchedule(classItem) {
   wrapper.className = 'mini-schedule-card';
   const top = document.createElement('div');
   top.className = 'mini-schedule-heading';
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'mini-schedule-title';
   const title = document.createElement('strong');
   title.textContent = classItem.name;
+  const meta = document.createElement('span');
+  meta.textContent = `${classItem.entries.length} blocos de aula`;
+  titleWrap.append(title, meta);
   const pdf = document.createElement('button');
   pdf.type = 'button';
   pdf.className = 'mini-pdf-button';
-  pdf.textContent = 'PDF';
+  pdf.textContent = 'Imprimir / PDF';
   pdf.addEventListener('click', () => generatePdfForClass(classItem));
-  top.append(title, pdf);
+  top.append(titleWrap, pdf);
   wrapper.append(top);
 
   const grid = document.createElement('div');
@@ -627,7 +632,7 @@ function renderMiniSchedule(classItem) {
     if (dayIndex < 0) return;
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = `mini-entry ${isChanged(entry) ? 'is-changed' : ''}`;
+    card.className = `mini-entry ${cardColor(entry.professor)} ${isChanged(entry) ? 'is-changed' : ''}`;
     card.style.gridColumn = String(dayIndex + 2);
     card.style.gridRow = `${entry.startSlot + 2} / span ${entry.span}`;
     card.innerHTML = `<strong>${escapeHtml(entry.subject)}</strong><span>${escapeHtml(entry.professor)}</span>`;
@@ -651,7 +656,7 @@ function renderCourseWeekOverview() {
   const course = getCourse();
   const classes = sortClasses(course?.classes ?? []);
   els.scheduleTitle.textContent = `${course.name} · visão semanal de todas as turmas`;
-  els.scheduleMeta.textContent = `${classes.length} turmas · uma turma por linha · use “Gerar PDF semanal” para exportar todas em um único arquivo`;
+  els.scheduleMeta.textContent = `${classes.length} turmas · uma turma por linha · use “Imprimir semana / PDF” para imprimir ou salvar todas em um único PDF`;
   els.overviewContainer.innerHTML = '';
   els.overviewContainer.className = 'overview-container week-overview';
   classes.forEach((classItem) => els.overviewContainer.append(renderMiniSchedule(classItem)));
@@ -769,10 +774,10 @@ function generatePdfForClass(classItem = getClass()) {
       weekDate: els.weekDateInput.value,
       sourceName: dataset.source,
     });
-    setStatus(`PDF gerado: ${filename}`, 'success');
+    setStatus(`Janela de impressão aberta: ${filename}. Para PDF, escolha “Salvar como PDF”.`, 'success');
   } catch (error) {
     console.error(error);
-    setStatus(`Não foi possível gerar o PDF: ${error.message}`, 'error');
+    setStatus(`Não foi possível abrir a impressão: ${error.message}`, 'error');
   }
 }
 
@@ -785,10 +790,10 @@ function generatePdfForCourse(course = getCourse()) {
       weekDate: els.weekDateInput.value,
       sourceName: dataset.source,
     });
-    setStatus(`PDF semanal gerado: ${filename}`, 'success');
+    setStatus(`Impressão semanal aberta: ${filename}. Para PDF, escolha “Salvar como PDF”.`, 'success');
   } catch (error) {
     console.error(error);
-    setStatus(`Não foi possível gerar o PDF semanal: ${error.message}`, 'error');
+    setStatus(`Não foi possível abrir a impressão semanal: ${error.message}`, 'error');
   }
 }
 

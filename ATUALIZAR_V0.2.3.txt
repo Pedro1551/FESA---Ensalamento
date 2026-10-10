@@ -1,0 +1,13 @@
+ATUALIZAÇÃO v0.2.3
+
+1. Copie o conteúdo deste ZIP para a raiz do projeto atual.
+2. Confirme a substituição dos arquivos existentes.
+3. Não é necessário reinstalar dependências.
+4. Execute: npm run dev
+5. Gere novamente o PDF de uma turma e o PDF semanal do curso.
+
+Arquivos principais alterados:
+- src/pdfGenerator.js
+- package.json
+- CHANGELOG.md
+- README.md
