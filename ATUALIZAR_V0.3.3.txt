@@ -1,0 +1,12 @@
+Atualização v0.3.3
+
+Copie os arquivos deste pacote para a raiz do projeto atual, substituindo os existentes.
+
+Arquivos alterados:
+- src/pdfGenerator.js
+- README.md
+- CHANGELOG.md
+
+Objetivo:
+- aplicar no PDF/impresso a mesma paleta expandida de 10 cores por professor usada no ensalamento;
+- manter o relatório com fundo claro, mas com cores mais vivas e variadas.

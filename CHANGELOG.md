@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.3.3] - 2026-10-16
+
+### Melhorado
+- PDF/impresso passa a usar a mesma paleta expandida de 10 cores por professor do ensalamento.
+- As cores do PDF permanecem claras para impressão, mas com acentos mais vivos e maior diversidade visual.
+- O mesmo professor mantém a mesma família de cor entre a interface e o relatório.
+
+## [0.3.2] - 2026-10-16
+
+### Melhorado
+- Refinado o tema escuro com melhor contraste e visual mais consistente.
+- Cartões de aula do ensalamento com cores mais vivas e maior diversidade.
+- Expandida a paleta de identificação de professores para 10 tons.
+
+## [0.3.1] - 2026-10-16
+
+### Corrigido
+- Corrigido falso conflito ao devolver manualmente uma aula importada ao seu horário original.
+- Sobreposições de professor que já faziam parte da grade-base importada são reconhecidas como válidas quando ambas as aulas permanecem exatamente em suas posições originais.
+- Conflitos realmente novos continuam sendo bloqueados normalmente.
+
+### Alterado
+- Aplicado tema escuro em toda a interface do aplicativo.
+- Grades, painéis, filtros, modais, histórico, estados de conflito e cartões foram ajustados para melhor contraste no tema escuro.
+- Mantidas as cores por professor em tons escuros e o destaque visual de aulas alteradas/adicionadas.
+- A impressão/PDF permanece clara para preservar legibilidade e economia na impressão.
+
 ## [0.3.0] - 2026-10-09
 
 ### Adicionado

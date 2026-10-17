@@ -5,12 +5,16 @@ const DAY_ORDER = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feir
 const MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 const PRINT_TONES = [
-  { bg: '#f3f8fc', border: '#bfd1e1', accent: '#557ea5' },
-  { bg: '#f2f9f5', border: '#bfd8ca', accent: '#5c8a73' },
-  { bg: '#fbf7f2', border: '#dccdbc', accent: '#93775d' },
-  { bg: '#f7f5fb', border: '#cdc7df', accent: '#756b99' },
-  { bg: '#fbf9f1', border: '#ddd3af', accent: '#927d40' },
-  { bg: '#f2f9fa', border: '#bdd6d8', accent: '#4f8188' },
+  { bg: '#eef7ff', border: '#8bc8ff', accent: '#2f98ef' },
+  { bg: '#edfff8', border: '#80e6c1', accent: '#24b987' },
+  { bg: '#fff6eb', border: '#ffc88a', accent: '#ed9137' },
+  { bg: '#f6f0ff', border: '#c6adff', accent: '#8e6ee8' },
+  { bg: '#fffbea', border: '#ffe38b', accent: '#d4ae22' },
+  { bg: '#ecfbff', border: '#8ae5f7', accent: '#36b8d8' },
+  { bg: '#fff0f3', border: '#ffafbc', accent: '#e86780' },
+  { bg: '#f0ffef', border: '#9ee99b', accent: '#54bd50' },
+  { bg: '#fff0fe', border: '#f0a9e9', accent: '#d866ce' },
+  { bg: '#fff1ed', border: '#ffb4a0', accent: '#e96d4e' },
 ];
 
 function normalizeKey(value) {

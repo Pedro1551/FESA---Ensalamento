@@ -4,7 +4,7 @@ Protótipo em JavaScript para visualização e edição do horário acadêmico a
 
 ## Versão atual
 
-`v0.3.0`
+`v0.3.3`
 
 ## Funcionalidades atuais
 

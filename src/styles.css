@@ -544,3 +544,345 @@ body.modal-open { overflow: hidden; }
   .modal-actions .button { flex: 1; }
 }
 .lesson-card { position: relative; }
+
+/* v0.3.1 — tema escuro principal */
+:root {
+  color-scheme: dark;
+  color: #e7edf5;
+  background: #0b1016;
+  --border: #283340;
+  --muted: #98a6b5;
+  --panel: #111820;
+  --panel-soft: #151e28;
+  --primary: #78a9d5;
+  --primary-strong: #8fbae0;
+  --success: #78c99b;
+  --success-bg: #10271d;
+  --danger: #ef9090;
+  --danger-bg: #2a1517;
+  --warning: #dfc36c;
+  --warning-bg: #29240f;
+
+  --tone-1-accent: #6d9dc7;
+  --tone-1-border: #31506b;
+  --tone-1-bg: #132330;
+  --tone-2-accent: #72a58b;
+  --tone-2-border: #315143;
+  --tone-2-bg: #14251f;
+  --tone-3-accent: #b08c70;
+  --tone-3-border: #594436;
+  --tone-3-bg: #281f1a;
+  --tone-4-accent: #9b8bc4;
+  --tone-4-border: #4b4062;
+  --tone-4-bg: #211d2b;
+  --tone-5-accent: #b6a05f;
+  --tone-5-border: #554b30;
+  --tone-5-bg: #292518;
+  --tone-6-accent: #6ea5ad;
+  --tone-6-border: #315158;
+  --tone-6-bg: #14262a;
+}
+
+html, body { background: #0b1016; color: #e7edf5; }
+body { background: radial-gradient(circle at top, #111a24 0, #0b1016 520px); }
+::selection { background: #315c82; color: #fff; }
+* { scrollbar-color: #465567 #111820; }
+
+.eyebrow { color: #82b1dc; }
+h1, .section-heading h2, .bottom-grid h2 { color: #f1f5f9; }
+.subtitle { color: #98a6b5; }
+
+.panel,
+.stat,
+.schedule-scroll,
+.day-class-panel,
+.mini-schedule-card,
+.details-panel,
+.activity-panel {
+  background: #111820;
+  border-color: #283340;
+}
+
+.toolbar label,
+.manual-move label,
+.toolbar label > span,
+.manual-move label > span,
+.field { color: #a9b5c2; }
+
+.toolbar select,
+.toolbar input,
+.manual-move select,
+.field input,
+.field select {
+  background: #0f161e;
+  color: #e7edf5;
+  border-color: #334151;
+}
+.toolbar select:hover,
+.toolbar input:hover,
+.manual-move select:hover,
+.field input:hover,
+.field select:hover { border-color: #46596c; }
+.toolbar select:focus,
+.toolbar input:focus,
+.manual-move select:focus,
+.field input:focus,
+.field select:focus {
+  border-color: #6997bf;
+  outline-color: #20374c;
+}
+select option { background: #111820; color: #e7edf5; }
+
+.button.primary,
+.file-button { background: #245b88; color: #f8fbff; }
+.button.primary:hover,
+.file-button:hover { background: #2c6d9f; }
+.button.secondary,
+.mini-pdf-button,
+.icon-button {
+  background: #151e28;
+  color: #dbe4ed;
+  border-color: #384555;
+}
+.button.secondary:hover,
+.mini-pdf-button:hover,
+.icon-button:hover { background: #1b2733; border-color: #526274; }
+.button.danger { background: #1b1517; color: #ef9a9a; border-color: #63393d; }
+.button.danger:hover { background: #29191c; border-color: #855056; }
+
+.stat { background: #111820; }
+.stat span { color: #8e9baa; }
+.stat strong { color: #edf3f8; }
+
+.schedule-scroll { background: #0f161e; border-color: #293645; }
+.grid-corner,
+.day-header {
+  background: #151e28;
+  color: #e5ecf4;
+  border-color: #2c3947;
+}
+.grid-corner { color: #95a4b4; }
+.time-cell {
+  background: #121a23;
+  border-color: #2c3947;
+}
+.time-cell strong { color: #edf3f8; }
+.time-cell span { color: #8594a4; }
+.drop-cell {
+  background: #0e151c;
+  border-color: #25313d;
+}
+.drop-cell.is-over,
+.lesson-card.is-drop-target {
+  background: #12293a;
+  box-shadow: inset 0 0 0 2px #5689b5;
+}
+
+.lesson-card,
+.overview-lesson,
+.mini-entry {
+  color: #e9eff5;
+  box-shadow: none;
+}
+.lesson-subject,
+.overview-lesson > span,
+.mini-entry strong { color: #f0f4f8; }
+.lesson-professor,
+.overview-lesson > small,
+.mini-entry span { color: #a7b3bf; }
+.overview-lesson > strong { color: var(--entry-accent); }
+.lesson-room-inline { color: #b5c1cd; }
+.lesson-card.is-changed,
+.overview-lesson.is-changed,
+.mini-entry.is-changed {
+  --entry-accent: #d2b84a;
+  --entry-border: #6d602c;
+  --entry-bg: #2b2614;
+}
+.lesson-card.is-new,
+.overview-lesson.is-new,
+.mini-entry.is-new { box-shadow: inset 0 0 0 1px #596b9c; }
+.lesson-badge {
+  background: #222b48;
+  color: #b8c5f0;
+  border: 1px solid #445789;
+}
+
+.notes-area {
+  background: #121a23;
+  border-color: #293645;
+  color: #aab6c2;
+}
+.notes-area strong { color: #dce4ec; }
+
+.day-class-panel { border-color: #283541; background: #111820; }
+.day-class-heading { background: #151e28; border-color: #2b3845; }
+.day-class-heading strong { color: #eaf0f5; }
+.day-class-heading span { color: #909eac; }
+.day-class-lessons { background: #111820; }
+.overview-empty { color: #8f9dab; }
+
+.mini-schedule-card { border-color: #2b3744; background: #111820; }
+.mini-schedule-heading {
+  background: #151e28;
+  color: #ecf2f7;
+  border-color: #2b3744;
+}
+.mini-schedule-title span { color: #8e9dab; }
+.mini-corner,
+.mini-day,
+.mini-time,
+.mini-cell { border-color: #293642; }
+.mini-corner,
+.mini-day { background: #151e28; color: #e4ebf2; }
+.mini-time { background: #121a23; color: #9aa8b7; }
+.mini-cell { background: #0e151c; }
+
+.details-empty,
+.activity-empty,
+.hint,
+.empty-state { color: #8f9dac; }
+.lesson-details dt { color: #8f9dac; }
+.lesson-details dd { color: #e0e7ee; }
+.manual-move { border-color: #293642; }
+
+.status-message {
+  background: #141d26;
+  border-color: #2d3b49;
+  color: #b7c2ce;
+}
+.status-message.success { color: #8bd4aa; background: #10251b; border-color: #2d6042; }
+.status-message.error { color: #f1a0a0; background: #281416; border-color: #68383d; }
+.status-message.warning { color: #e4ca78; background: #29230e; border-color: #675b2c; }
+
+.activity-log { scrollbar-color: #465567 #111820; }
+.activity-item {
+  background: #121a23;
+  border-color: #283541;
+}
+.activity-item span { color: #8291a0; }
+.activity-item p { color: #b7c2cd; }
+
+.modal-backdrop { background: rgba(3, 7, 12, .72); }
+.lesson-modal {
+  background: #111820;
+  border-color: #2d3947;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .45);
+}
+.modal-header h2 { color: #eef4f8; }
+.modal-eyebrow { color: #82b1dc; }
+.field span small { color: #7f8d9c; }
+.form-message { background: #281416; border-color: #68383d; color: #f1a0a0; }
+.form-message.success { background: #10251b; border-color: #2d6042; color: #8bd4aa; }
+.modal-actions { border-color: #293642; }
+
+.legend { color: #99a7b5; }
+.legend-dot { background: #203141; border-color: #3b5369; }
+.legend-dot.changed { background: #403817; border-color: #8c7730; }
+.legend-dot.added { background: #222b48; border-color: #52669c; box-shadow: inset 3px 0 0 #8295cf; }
+.legend-dot.tone-sample { background: var(--tone-1-bg); border-color: var(--tone-1-border); border-left-color: var(--tone-1-accent); }
+
+
+/* v0.3.2 — refinamento do tema escuro com cores mais vivas e maior contraste */
+:root {
+  --tone-1-accent: #58b2ff;
+  --tone-1-border: #28567f;
+  --tone-1-bg: #132d46;
+  --tone-2-accent: #48d3a6;
+  --tone-2-border: #256e57;
+  --tone-2-bg: #123529;
+  --tone-3-accent: #ffb86b;
+  --tone-3-border: #8a5c21;
+  --tone-3-bg: #3d2913;
+  --tone-4-accent: #b799ff;
+  --tone-4-border: #624aa4;
+  --tone-4-bg: #2c214f;
+  --tone-5-accent: #ffd75e;
+  --tone-5-border: #8c6d11;
+  --tone-5-bg: #3f320d;
+  --tone-6-accent: #5fd8f7;
+  --tone-6-border: #257189;
+  --tone-6-bg: #103744;
+  --tone-7-accent: #ff8ea1;
+  --tone-7-border: #8a4251;
+  --tone-7-bg: #43202a;
+  --tone-8-accent: #7de27a;
+  --tone-8-border: #3f7e3b;
+  --tone-8-bg: #1d3b1b;
+  --tone-9-accent: #ff9df6;
+  --tone-9-border: #8c4e89;
+  --tone-9-bg: #41213f;
+  --tone-10-accent: #ff9a7a;
+  --tone-10-border: #8a513d;
+  --tone-10-bg: #45261d;
+}
+
+body {
+  background: linear-gradient(180deg, #08111b 0%, #0b1420 32%, #0c1622 100%);
+}
+.page-shell { padding-top: 24px; }
+.panel, .stat, .schedule-scroll, .day-class-panel, .mini-schedule-card, .details-panel, .activity-panel {
+  background: #0f1722;
+  border-color: #233244;
+  box-shadow: 0 8px 24px rgba(2, 8, 18, .28);
+}
+.toolbar select, .toolbar input, .manual-move select, .field input, .field select { background: #0c141e; }
+.grid-corner, .day-header, .mini-corner, .mini-day {
+  background: linear-gradient(180deg, #132131 0%, #101b29 100%);
+  border-color: #243447;
+}
+.time-cell, .mini-time {
+  background: #0f1824;
+  border-color: #233243;
+}
+.drop-cell, .mini-cell {
+  background: #0c141d;
+  border-color: #1e2b39;
+}
+.schedule-scroll { background: #0b131c; }
+.lesson-card, .overview-lesson, .mini-entry {
+  border-width: 1px;
+  border-left-width: 5px;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .18);
+}
+.lesson-card { margin: 6px; padding: 12px 13px; }
+.lesson-card:hover, .overview-lesson:hover, .mini-entry:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .22);
+}
+.lesson-card.is-selected { outline-width: 3px; }
+.lesson-subject, .overview-lesson > span, .mini-entry strong { color: #f8fbff; }
+.lesson-professor, .overview-lesson > small, .mini-entry span, .lesson-room-inline { color: rgba(234, 242, 250, .86); }
+.lesson-card.tone-1, .overview-lesson.tone-1, .mini-entry.tone-1 { --entry-accent: var(--tone-1-accent); --entry-border: var(--tone-1-border); --entry-bg: linear-gradient(180deg, #17324d 0%, #11283e 100%); }
+.lesson-card.tone-2, .overview-lesson.tone-2, .mini-entry.tone-2 { --entry-accent: var(--tone-2-accent); --entry-border: var(--tone-2-border); --entry-bg: linear-gradient(180deg, #16392d 0%, #10281f 100%); }
+.lesson-card.tone-3, .overview-lesson.tone-3, .mini-entry.tone-3 { --entry-accent: var(--tone-3-accent); --entry-border: var(--tone-3-border); --entry-bg: linear-gradient(180deg, #442d15 0%, #342110 100%); }
+.lesson-card.tone-4, .overview-lesson.tone-4, .mini-entry.tone-4 { --entry-accent: var(--tone-4-accent); --entry-border: var(--tone-4-border); --entry-bg: linear-gradient(180deg, #302452 0%, #241b3f 100%); }
+.lesson-card.tone-5, .overview-lesson.tone-5, .mini-entry.tone-5 { --entry-accent: var(--tone-5-accent); --entry-border: var(--tone-5-border); --entry-bg: linear-gradient(180deg, #46380f 0%, #382d0d 100%); }
+.lesson-card.tone-6, .overview-lesson.tone-6, .mini-entry.tone-6 { --entry-accent: var(--tone-6-accent); --entry-border: var(--tone-6-border); --entry-bg: linear-gradient(180deg, #143a48 0%, #102d37 100%); }
+.lesson-card.tone-7, .overview-lesson.tone-7, .mini-entry.tone-7 { --entry-accent: var(--tone-7-accent); --entry-border: var(--tone-7-border); --entry-bg: linear-gradient(180deg, #48232d 0%, #381b23 100%); }
+.lesson-card.tone-8, .overview-lesson.tone-8, .mini-entry.tone-8 { --entry-accent: var(--tone-8-accent); --entry-border: var(--tone-8-border); --entry-bg: linear-gradient(180deg, #234220 0%, #1a3218 100%); }
+.lesson-card.tone-9, .overview-lesson.tone-9, .mini-entry.tone-9 { --entry-accent: var(--tone-9-accent); --entry-border: var(--tone-9-border); --entry-bg: linear-gradient(180deg, #472446 0%, #381c37 100%); }
+.lesson-card.tone-10, .overview-lesson.tone-10, .mini-entry.tone-10 { --entry-accent: var(--tone-10-accent); --entry-border: var(--tone-10-border); --entry-bg: linear-gradient(180deg, #49281f 0%, #3a2019 100%); }
+
+.lesson-card.is-changed, .overview-lesson.is-changed, .mini-entry.is-changed {
+  --entry-accent: #ffd45b;
+  --entry-border: #866a14;
+  --entry-bg: linear-gradient(180deg, #483810 0%, #36290b 100%);
+}
+.lesson-card.is-new, .overview-lesson.is-new, .mini-entry.is-new {
+  box-shadow: inset 0 0 0 1px #6ca0ff, 0 8px 20px rgba(0, 0, 0, .18);
+}
+.lesson-badge { background: #1f3155; color: #d8e6ff; border-color: #4968a0; }
+.legend-dot { background: #17314d; border-color: #2e5b83; }
+.legend-dot.changed { background: #463810; border-color: #92771d; }
+.legend-dot.added { background: #1e2d54; border-color: #4e70b7; box-shadow: inset 3px 0 0 #7fa0e6; }
+.legend-dot.tone-sample { background: linear-gradient(180deg, #17324d 0%, #11283e 100%); border-color: #28567f; border-left-color: #58b2ff; }
+.mini-schedule-heading, .day-class-heading { background: #111b28; }
+.activity-item, .notes-area, .status-message, .lesson-modal { box-shadow: none; }
+.section-heading p, .subtitle, .mini-schedule-title span, .day-class-heading span, .lesson-details dt, .activity-item span, .details-empty, .hint, .empty-state { color: #99a9ba; }
+.topbar { margin-bottom: 24px; }
+.status-message { background: #101824; }
+.status-message.success { background: #10271d; }
+.status-message.error { background: #2a1517; }
+.status-message.warning { background: #30280f; }

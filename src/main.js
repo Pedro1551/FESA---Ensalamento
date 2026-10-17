@@ -300,6 +300,25 @@ function rangesOverlap(a, b) {
   return a.start < b.end && b.start < a.end;
 }
 
+function isImportedEntryAtBaseline(entry, { day = entry.day, startSlot = entry.startSlot, span = entry.span, professor = entry.professor } = {}) {
+  if (!entry || entry.origin === 'manual') return false;
+  return day === entry.originalDay
+    && startSlot === entry.originalStartSlot
+    && span === entry.originalSpan
+    && normalizeKey(professor) === normalizeKey(entry.originalProfessor);
+}
+
+function isBaselineApprovedProfessorOverlap(entry, day, startSlot, other) {
+  if (!isImportedEntryAtBaseline(entry, { day, startSlot, span: entry.span, professor: entry.professor })) return false;
+  if (!isImportedEntryAtBaseline(other)) return false;
+
+  // Se as duas aulas estão exatamente nas posições importadas do Excel, o possível
+  // compartilhamento de professor faz parte da grade-base e deve ser aceito. Isso é
+  // importante para aulas compartilhadas entre turmas e também permite restaurar
+  // manualmente uma aula ao seu horário original sem gerar um falso conflito.
+  return true;
+}
+
 function findProfessorConflicts(entry, day, startSlot, excludedIds = []) {
   const proposed = getEntryInterval(entry, day, startSlot);
   if (!proposed) return [{ reason: 'Horário de destino inválido.' }];
@@ -312,7 +331,9 @@ function findProfessorConflicts(entry, day, startSlot, excludedIds = []) {
     const commonProfessor = professorKeys(other.professor).some((key) => sourceProfessors.includes(key));
     if (!commonProfessor || other.day !== day) return false;
     const otherInterval = getEntryInterval(other);
-    return otherInterval && rangesOverlap(proposed, otherInterval);
+    if (!otherInterval || !rangesOverlap(proposed, otherInterval)) return false;
+    if (isBaselineApprovedProfessorOverlap(entry, day, startSlot, other)) return false;
+    return true;
   });
 }
 
@@ -437,7 +458,7 @@ function populateDaySelector() {
 }
 
 function cardColor(professor) {
-  const colors = ['tone-1', 'tone-2', 'tone-3', 'tone-4', 'tone-5', 'tone-6'];
+  const colors = ['tone-1', 'tone-2', 'tone-3', 'tone-4', 'tone-5', 'tone-6', 'tone-7', 'tone-8', 'tone-9', 'tone-10'];
   let hash = 0;
   for (const char of normalizeKey(professor)) hash = ((hash << 5) - hash) + char.charCodeAt(0);
   return colors[Math.abs(hash) % colors.length];
