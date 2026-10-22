@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.7] - 2026-10-22
+
+### Corrigido
+- Ao devolver manualmente uma aula para a posição anterior, o movimento agora é reconhecido como reversão da última alteração.
+- Trocas entre duas aulas também são revertidas de forma atômica, evitando falsos conflitos com o próprio estado criado pelo sistema.
+
+## [0.3.6] - 2026-10-22
+
+### Corrigido
+- Corrigido falso conflito ao devolver manualmente uma aula importada ao seu horário original.
+- A validação agora reconhece sobreposições de professor que já existiam na grade-base do Excel, mesmo após movimentos intermediários.
+- Corrigido o card claro no tema escuro após mover/trocar aulas; o estado de aula alterada agora usa um destaque escuro consistente.
+
+## [0.3.5] - 2026-10-22
+
+### Melhorado
+- Interface reorganizada para uma apresentação mais profissional, com menos textos operacionais e melhor hierarquia visual.
+- Cabeçalho, filtros, ações, resumo, detalhes e atividade foram compactados e padronizados.
+- Nomenclaturas de navegação e exportação foram simplificadas.
+- Ações e filtros agora são contextuais: controles exclusivos da turma ficam ocultos nas visões gerais.
+- A seleção de aulas nas visões diária e semanal agora preserva a visualização atual.
+- Adicionada ação explícita `Abrir grade da turma` para navegar até a grade quando desejado.
+
+### Corrigido
+- Corrigido o comportamento em que a seleção de uma aula nas visões diária/semanal alterava automaticamente a visualização para a grade semanal da turma.
+
+## [0.3.4] - 2026-10-16
+
+### Corrigido
+- Removido o rodapé interno do relatório de impressão/PDF (fonte, página e data de geração).
+- O conteúdo inferior agora fica totalmente livre, independentemente da opção de cabeçalhos e rodapés do navegador.
+
 ## [0.3.3] - 2026-10-16
 
 ### Melhorado

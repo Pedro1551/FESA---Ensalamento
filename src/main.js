@@ -4,7 +4,7 @@ import { generateClassWeekPdf, generateCourseWeekPdf } from './pdfGenerator.js';
 
 const DEFAULT_FILE = '/data/Horario Azul - Faculdade - 2026.2.xls';
 const FALLBACK_FILE = '/data/horario-fallback.json';
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.5';
 const VIEW_CLASS_WEEK = 'class-week';
 const VIEW_COURSE_DAY = 'course-day';
 const VIEW_COURSE_WEEK = 'course-week';
@@ -14,53 +14,55 @@ const app = document.querySelector('#app');
 app.innerHTML = `
   <main class="page-shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">PROTÓTIPO ACADÊMICO · v${APP_VERSION}</p>
-        <h1>Ensalamento 2026.2</h1>
-        <p class="subtitle">Grade importada diretamente do Excel, com visualização diária/semanal, edição por arrastar e soltar e impressão semanal com opção de salvar em PDF.</p>
+      <div class="brand-block">
+        <p class="eyebrow">GESTÃO ACADÊMICA</p>
+        <h1>Ensalamento</h1>
+        <p class="subtitle">Planejamento acadêmico · 2º semestre de 2026</p>
       </div>
-      <label class="file-button">
-        <span>Carregar outro Excel</span>
+      <label class="file-button" title="Importar uma nova grade a partir de Excel">
+        <span>Importar Excel</span>
         <input id="fileInput" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
       </label>
     </header>
 
-    <section class="toolbar panel">
-      <label>
-        <span>Curso / planilha</span>
-        <select id="courseSelect"></select>
-      </label>
-      <label>
-        <span>Turma</span>
-        <select id="classSelect"></select>
-      </label>
-      <label>
-        <span>Visualização</span>
-        <select id="viewModeSelect">
-          <option value="${VIEW_CLASS_WEEK}">Turma · semana</option>
-          <option value="${VIEW_COURSE_DAY}">Todas as turmas · dia</option>
-          <option value="${VIEW_COURSE_WEEK}">Todas as turmas · semana</option>
-        </select>
-      </label>
-      <label id="dayFilterLabel" hidden>
-        <span>Dia</span>
-        <select id="daySelect"></select>
-      </label>
-      <label>
-        <span>Semana da impressão</span>
-        <input id="weekDateInput" class="date-input" type="date" />
-      </label>
+    <section class="toolbar panel" aria-label="Filtros e ações da grade">
+      <div class="toolbar-fields">
+        <label>
+          <span>Curso</span>
+          <select id="courseSelect"></select>
+        </label>
+        <label id="classFilterLabel">
+          <span>Turma</span>
+          <select id="classSelect"></select>
+        </label>
+        <label>
+          <span>Visualização</span>
+          <select id="viewModeSelect">
+            <option value="${VIEW_CLASS_WEEK}">Grade da turma</option>
+            <option value="${VIEW_COURSE_DAY}">Visão diária</option>
+            <option value="${VIEW_COURSE_WEEK}">Visão semanal</option>
+          </select>
+        </label>
+        <label id="dayFilterLabel" hidden>
+          <span>Dia</span>
+          <select id="daySelect"></select>
+        </label>
+        <label>
+          <span>Semana</span>
+          <input id="weekDateInput" class="date-input" type="date" />
+        </label>
+      </div>
       <div class="toolbar-actions">
-        <button id="newLessonButton" class="button primary" type="button">+ Nova aula</button>
-        <button id="coursePdfButton" class="button secondary" type="button">Imprimir semana / PDF</button>
-        <button id="pdfButton" class="button secondary" type="button">Imprimir turma / PDF</button>
-        <button id="undoButton" class="button secondary" type="button" disabled>Desfazer</button>
-        <button id="resetButton" class="button secondary" type="button">Restaurar turma</button>
+        <button id="newLessonButton" class="button primary" type="button">Nova aula</button>
+        <button id="coursePdfButton" class="button secondary" type="button">Exportar semana</button>
+        <button id="pdfButton" class="button secondary" type="button">Exportar turma</button>
+        <button id="undoButton" class="button ghost" type="button" disabled>Desfazer</button>
+        <button id="resetButton" class="button ghost" type="button">Restaurar</button>
       </div>
     </section>
 
-    <section class="stats" aria-label="Resumo da planilha">
-      <article class="stat"><span>Arquivo</span><strong id="statFile">—</strong></article>
+    <section class="stats" aria-label="Resumo do período">
+      <article class="stat"><span>Período</span><strong id="statFile">2026.2</strong></article>
       <article class="stat"><span>Turmas</span><strong id="statClasses">0</strong></article>
       <article class="stat"><span>Aulas</span><strong id="statLessons">0</strong></article>
       <article class="stat"><span>Alterações</span><strong id="statChanges">0</strong></article>
@@ -69,8 +71,8 @@ app.innerHTML = `
     <section class="panel schedule-panel">
       <div class="section-heading">
         <div>
-          <h2 id="scheduleTitle">Carregando grade…</h2>
-          <p id="scheduleMeta">Aguarde a leitura da planilha.</p>
+          <h2 id="scheduleTitle">Grade acadêmica</h2>
+          <p id="scheduleMeta">Carregando dados…</p>
         </div>
         <div id="legend" class="legend">
           <span><i class="legend-dot tone-sample tone-1"></i>Cores por professor</span>
@@ -87,23 +89,27 @@ app.innerHTML = `
 
     <section class="bottom-grid">
       <article class="panel details-panel">
-        <h2>Detalhes / movimentação</h2>
-        <div id="lessonDetails" class="details-empty">Clique em uma aula para ver os detalhes.</div>
+        <div class="panel-heading">
+          <h2>Detalhes da aula</h2>
+        </div>
+        <div id="lessonDetails" class="details-empty">Selecione uma aula para consultar ou editar.</div>
         <div id="manualMove" class="manual-move" hidden>
-          <label><span>Dia de destino</span><select id="manualDay"></select></label>
+          <label><span>Dia</span><select id="manualDay"></select></label>
           <label><span>Início</span><select id="manualSlot"></select></label>
-          <button id="manualMoveButton" class="button secondary" type="button">Mover aula selecionada</button>
+          <button id="manualMoveButton" class="button secondary" type="button">Mover</button>
         </div>
         <div id="lessonActions" class="lesson-actions" hidden>
-          <button id="editLessonButton" class="button secondary" type="button">Editar aula</button>
-          <button id="cancelLessonButton" class="button danger" type="button">Cancelar aula</button>
+          <button id="openClassButton" class="button secondary" type="button" hidden>Abrir grade da turma</button>
+          <button id="editLessonButton" class="button secondary" type="button">Editar</button>
+          <button id="cancelLessonButton" class="button danger" type="button">Remover da grade</button>
         </div>
       </article>
       <article class="panel activity-panel">
-        <h2>Validação</h2>
-        <div id="statusMessage" class="status-message info">Nenhuma alteração realizada.</div>
-        <div id="activityLog" class="activity-log"><p class="activity-empty">As alterações desta sessão aparecerão aqui.</p></div>
-        <p class="hint">O Excel é a grade-base. Alterações, novas aulas e cancelamentos são aplicados sobre esse estado nesta sessão e refletidos automaticamente nas visões e na impressão.</p>
+        <div class="panel-heading">
+          <h2>Atividade</h2>
+        </div>
+        <div id="statusMessage" class="status-message info">Pronto para edição.</div>
+        <div id="activityLog" class="activity-log"><p class="activity-empty">Nenhuma alteração nesta sessão.</p></div>
       </article>
     </section>
   </main>
@@ -140,6 +146,7 @@ const els = {
   fileInput: document.querySelector('#fileInput'),
   courseSelect: document.querySelector('#courseSelect'),
   classSelect: document.querySelector('#classSelect'),
+  classFilterLabel: document.querySelector('#classFilterLabel'),
   viewModeSelect: document.querySelector('#viewModeSelect'),
   dayFilterLabel: document.querySelector('#dayFilterLabel'),
   daySelect: document.querySelector('#daySelect'),
@@ -166,6 +173,7 @@ const els = {
   manualSlot: document.querySelector('#manualSlot'),
   manualMoveButton: document.querySelector('#manualMoveButton'),
   lessonActions: document.querySelector('#lessonActions'),
+  openClassButton: document.querySelector('#openClassButton'),
   editLessonButton: document.querySelector('#editLessonButton'),
   cancelLessonButton: document.querySelector('#cancelLessonButton'),
   statusMessage: document.querySelector('#statusMessage'),
@@ -308,15 +316,44 @@ function isImportedEntryAtBaseline(entry, { day = entry.day, startSlot = entry.s
     && normalizeKey(professor) === normalizeKey(entry.originalProfessor);
 }
 
-function isBaselineApprovedProfessorOverlap(entry, day, startSlot, other) {
-  if (!isImportedEntryAtBaseline(entry, { day, startSlot, span: entry.span, professor: entry.professor })) return false;
-  if (!isImportedEntryAtBaseline(other)) return false;
+function baselineInterval(entry) {
+  if (!entry || entry.origin === 'manual') return null;
+  const classItem = getClassById(entry.classId);
+  if (!classItem) return null;
+  const startSlot = Number(entry.originalStartSlot);
+  const span = Number(entry.originalSpan);
+  const first = classItem.slots[startSlot];
+  const last = classItem.slots[startSlot + span - 1];
+  if (!first || !last || !entry.originalDay) return null;
+  return {
+    day: entry.originalDay,
+    start: toMinutes(first.start),
+    end: toMinutes(last.end),
+  };
+}
 
-  // Se as duas aulas estão exatamente nas posições importadas do Excel, o possível
-  // compartilhamento de professor faz parte da grade-base e deve ser aceito. Isso é
-  // importante para aulas compartilhadas entre turmas e também permite restaurar
-  // manualmente uma aula ao seu horário original sem gerar um falso conflito.
-  return true;
+function baselineEntriesOverlap(entry, other) {
+  if (!entry || !other || entry.origin === 'manual' || other.origin === 'manual') return false;
+
+  // A exceção só vale quando os professores continuam sendo os mesmos importados.
+  // Se algum professor foi editado manualmente, a sobreposição passa a ser uma nova
+  // situação e precisa ser validada normalmente.
+  if (normalizeKey(entry.professor) !== normalizeKey(entry.originalProfessor)) return false;
+  if (normalizeKey(other.professor) !== normalizeKey(other.originalProfessor)) return false;
+
+  const entryBaseline = baselineInterval(entry);
+  const otherBaseline = baselineInterval(other);
+  if (!entryBaseline || !otherBaseline || entryBaseline.day !== otherBaseline.day) return false;
+  return rangesOverlap(entryBaseline, otherBaseline);
+}
+
+function isBaselineApprovedProfessorOverlap(entry, day, startSlot, other) {
+  // Ao devolver uma aula importada exatamente para sua posição original, aceitamos
+  // somente as sobreposições de professor que JÁ existiam no Excel. Antes a exceção
+  // exigia que a outra aula também estivesse exatamente no seu estado atual original,
+  // o que podia gerar um falso conflito depois de uma sequência de movimentos/trocas.
+  if (!isImportedEntryAtBaseline(entry, { day, startSlot, span: entry.span, professor: entry.professor })) return false;
+  return baselineEntriesOverlap(entry, other);
 }
 
 function findProfessorConflicts(entry, day, startSlot, excludedIds = []) {
@@ -344,7 +381,7 @@ function setStatus(message, type = 'info') {
 
 function renderActivityLog() {
   if (!activityLog.length) {
-    els.activityLog.innerHTML = '<p class="activity-empty">As alterações desta sessão aparecerão aqui.</p>';
+    els.activityLog.innerHTML = '<p class="activity-empty">Nenhuma alteração nesta sessão.</p>';
     return;
   }
 
@@ -403,8 +440,8 @@ function countChanges() {
 
 function updateStats() {
   if (!dataset) return;
-  els.statFile.textContent = dataset.source;
-  els.statFile.title = dataset.source;
+  els.statFile.textContent = '2026.2';
+  els.statFile.title = '2º semestre de 2026';
   els.statClasses.textContent = String(allClasses().length);
   els.statLessons.textContent = String(allEntries({ includeCancelled: false }).length);
   els.statChanges.textContent = String(countChanges());
@@ -486,7 +523,7 @@ function escapeHtml(value) {
 function showLessonDetails(entry) {
   if (!entry || entry.status === 'cancelled') {
     els.lessonDetails.className = 'details-empty';
-    els.lessonDetails.textContent = 'Clique em uma aula para ver os detalhes.';
+    els.lessonDetails.textContent = 'Selecione uma aula para consultar ou editar.';
     els.manualMove.hidden = true;
     els.lessonActions.hidden = true;
     return;
@@ -494,8 +531,8 @@ function showLessonDetails(entry) {
 
   const interval = getEntryInterval(entry);
   const stateLabel = entry.origin === 'manual'
-    ? 'Adicionada nesta sessão'
-    : (isImportedModified(entry) ? 'Alterada nesta sessão' : 'Original da planilha');
+    ? 'Adicionada'
+    : (isImportedModified(entry) ? 'Alterada' : 'Original');
   const room = entry.room || entry.local || entry.location || '—';
 
   els.lessonDetails.className = 'lesson-details';
@@ -523,8 +560,9 @@ function showLessonDetails(entry) {
     }
   });
   els.manualSlot.value = String(entry.startSlot);
-  els.manualMove.hidden = false;
+  els.manualMove.hidden = viewMode !== VIEW_CLASS_WEEK;
   els.lessonActions.hidden = false;
+  els.openClassButton.hidden = viewMode === VIEW_CLASS_WEEK;
 }
 
 function clearDragTargets() {
@@ -614,7 +652,7 @@ function renderSchedule() {
   const slots = classItem.slots;
   els.scheduleTitle.textContent = `${getCourse().name} · ${classItem.name}`;
   const activeEntries = classItem.entries.filter((entry) => entry.status !== 'cancelled');
-  els.scheduleMeta.textContent = `${slots.length} horários · ${activeEntries.length} blocos ativos · arraste para área vazia ou sobre outra aula para trocar`; 
+  els.scheduleMeta.textContent = `${activeEntries.length} aulas · ${slots.length} horários`; 
 
   els.scheduleGrid.innerHTML = '';
   els.scheduleGrid.style.setProperty('--day-count', String(days.length));
@@ -681,13 +719,11 @@ function createOverviewLesson(entry, classItem) {
     <span>${escapeHtml(entry.subject)}</span>
     <small>${escapeHtml(entry.professor)}</small>
   `;
+  if (entry.id === selectedLessonId && classItem.id === selectedClassId) article.classList.add('is-selected');
   article.addEventListener('click', () => {
     selectedClassId = classItem.id;
     els.classSelect.value = classItem.id;
     selectedLessonId = entry.id;
-    viewMode = VIEW_CLASS_WEEK;
-    els.viewModeSelect.value = viewMode;
-    updateViewControls();
     render();
   });
   return article;
@@ -698,7 +734,7 @@ function renderCourseDayOverview() {
   const classes = sortClasses(course?.classes ?? []);
   els.scheduleTitle.textContent = `${course.name} · ${selectedOverviewDay}`;
   const total = classes.reduce((count, classItem) => count + classItem.entries.filter((entry) => entry.status !== 'cancelled' && entry.day === selectedOverviewDay).length, 0);
-  els.scheduleMeta.textContent = `${total} blocos de aula em ${classes.length} turmas · clique em uma aula para abrir a turma`;
+  els.scheduleMeta.textContent = `${total} aulas · ${classes.length} turmas`;
   els.overviewContainer.innerHTML = '';
 
   classes.forEach((classItem) => {
@@ -738,7 +774,7 @@ function renderMiniSchedule(classItem) {
   const pdf = document.createElement('button');
   pdf.type = 'button';
   pdf.className = 'mini-pdf-button';
-  pdf.textContent = 'Imprimir / PDF';
+  pdf.textContent = 'Exportar';
   pdf.addEventListener('click', () => generatePdfForClass(classItem));
   top.append(titleWrap, pdf);
   wrapper.append(top);
@@ -784,13 +820,11 @@ function renderMiniSchedule(classItem) {
     card.style.gridColumn = String(dayIndex + 2);
     card.style.gridRow = `${entry.startSlot + 2} / span ${entry.span}`;
     card.innerHTML = `<strong>${escapeHtml(entry.subject)}</strong><span>${escapeHtml(entry.professor)}</span>`;
+    if (entry.id === selectedLessonId && classItem.id === selectedClassId) card.classList.add('is-selected');
     card.addEventListener('click', () => {
       selectedClassId = classItem.id;
       els.classSelect.value = classItem.id;
       selectedLessonId = entry.id;
-      viewMode = VIEW_CLASS_WEEK;
-      els.viewModeSelect.value = viewMode;
-      updateViewControls();
       render();
     });
     grid.append(card);
@@ -803,8 +837,8 @@ function renderMiniSchedule(classItem) {
 function renderCourseWeekOverview() {
   const course = getCourse();
   const classes = sortClasses(course?.classes ?? []);
-  els.scheduleTitle.textContent = `${course.name} · visão semanal de todas as turmas`;
-  els.scheduleMeta.textContent = `${classes.length} turmas · uma turma por linha · use “Imprimir semana / PDF” para imprimir ou salvar todas em um único PDF`;
+  els.scheduleTitle.textContent = `${course.name} · Visão semanal`;
+  els.scheduleMeta.textContent = `${classes.length} turmas`;
   els.overviewContainer.innerHTML = '';
   els.overviewContainer.className = 'overview-container week-overview';
   classes.forEach((classItem) => els.overviewContainer.append(renderMiniSchedule(classItem)));
@@ -812,12 +846,18 @@ function renderCourseWeekOverview() {
 
 function updateViewControls() {
   const isClassWeek = viewMode === VIEW_CLASS_WEEK;
+  els.viewModeSelect.value = viewMode;
+  els.classFilterLabel.hidden = !isClassWeek;
   els.dayFilterLabel.hidden = viewMode !== VIEW_COURSE_DAY;
   els.scheduleScroll.hidden = !isClassWeek;
   els.overviewContainer.hidden = isClassWeek;
   els.legend.hidden = !isClassWeek;
+  els.newLessonButton.hidden = !isClassWeek;
+  els.pdfButton.hidden = !isClassWeek;
+  els.resetButton.hidden = !isClassWeek;
   els.manualMove.hidden = !isClassWeek || !selectedLessonId;
-  els.lessonActions.hidden = !isClassWeek || !selectedLessonId;
+  els.lessonActions.hidden = !selectedLessonId;
+  els.openClassButton.hidden = isClassWeek || !selectedLessonId;
   els.undoButton.disabled = undoStack.length === 0;
 }
 
@@ -1001,6 +1041,35 @@ function moveEntry(entryId, newDay, newStartSlot) {
   }
   if (entry.day === newDay && entry.startSlot === newStartSlot) return;
 
+  // Se o usuário estiver devolvendo a aula exatamente para a posição anterior do
+  // último movimento bem-sucedido, tratamos como reversão da própria ação em vez
+  // de executar novamente toda a validação de conflitos. Isso também desfaz a
+  // outra metade de uma troca, quando houver.
+  const lastAction = undoStack.at(-1);
+  const isReturningLastMove = lastAction
+    && (lastAction.type === 'move' || !lastAction.type)
+    && lastAction.entryId === entry.id
+    && lastAction.previous?.day === newDay
+    && Number(lastAction.previous?.startSlot) === Number(newStartSlot);
+
+  if (isReturningLastMove) {
+    undoStack.pop();
+    Object.assign(entry, lastAction.previous);
+
+    if (lastAction.swapEntryId && lastAction.swapPrevious) {
+      const swapEntry = getEntry(lastAction.swapEntryId);
+      if (swapEntry) Object.assign(swapEntry, lastAction.swapPrevious);
+    }
+
+    selectedLessonId = entry.id;
+    const interval = getEntryInterval(entry);
+    const message = `${entry.subject} retornou para ${entry.day}, ${interval?.label ?? ''}.`;
+    logActivity(message);
+    setStatus(message, 'success');
+    render();
+    return;
+  }
+
   const occupied = entryAt(classItem, newDay, newStartSlot, entry.span, entry.id);
   let swapEntry = null;
 
@@ -1109,7 +1178,7 @@ function resetCurrentClass() {
     return entry && entry.classId !== classItem.id;
   });
   selectedLessonId = null;
-  const message = `${classItem.name} restaurada para a grade-base importada do Excel.`;
+  const message = `${classItem.name} restaurada para o estado original.`;
   logActivity(message);
   setStatus(message, 'info');
   render();
@@ -1155,12 +1224,12 @@ function render() {
     renderSchedule();
   } else if (viewMode === VIEW_COURSE_DAY) {
     els.notesArea.hidden = true;
-    showLessonDetails(null);
     renderCourseDayOverview();
+    showLessonDetails(getEntry(selectedLessonId));
   } else {
     els.notesArea.hidden = true;
-    showLessonDetails(null);
     renderCourseWeekOverview();
+    showLessonDetails(getEntry(selectedLessonId));
   }
   updateStats();
 }
@@ -1172,12 +1241,12 @@ async function loadDefaultWorkbook() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const buffer = await response.arrayBuffer();
     dataset = normalizeDataset(parseScheduleWorkbook(buffer, 'Horario Azul - Faculdade - 2026.2.xls'));
-    setStatus('Excel carregado. As alterações ficam apenas nesta sessão.', 'success');
+    setStatus('Grade carregada com sucesso.', 'success');
   } catch (error) {
     console.error('Falha ao ler XLS, usando fallback JSON:', error);
     const response = await fetch(FALLBACK_FILE);
     dataset = normalizeDataset(await response.json());
-    setStatus('A planilha não pôde ser lida pelo navegador; dados normalizados de contingência foram carregados.', 'warning');
+    setStatus('Dados de contingência carregados.', 'warning');
   }
   undoStack = [];
   activityLog = [];
@@ -1220,7 +1289,6 @@ els.classSelect.addEventListener('change', () => {
 
 els.viewModeSelect.addEventListener('change', () => {
   viewMode = els.viewModeSelect.value;
-  selectedLessonId = null;
   updateViewControls();
   render();
 });
@@ -1250,6 +1318,12 @@ els.editLessonButton.addEventListener('click', () => {
   if (entry) openLessonModal(entry);
 });
 els.cancelLessonButton.addEventListener('click', cancelSelectedLesson);
+els.openClassButton.addEventListener('click', () => {
+  if (!selectedLessonId) return;
+  viewMode = VIEW_CLASS_WEEK;
+  updateViewControls();
+  render();
+});
 els.lessonStart.addEventListener('change', () => populateLessonEndOptions());
 els.lessonForm.addEventListener('submit', saveLessonFromForm);
 els.closeLessonModal.addEventListener('click', closeLessonModal);

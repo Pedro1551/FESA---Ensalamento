@@ -1,10 +1,10 @@
-# Ensalamento FESA - Protótipo
+# Ensalamento FESA
 
-Protótipo em JavaScript para visualização e edição do horário acadêmico a partir do arquivo **Horario Azul - Faculdade - 2026.2.xls**.
+Aplicação web em JavaScript para visualização, edição e planejamento do horário acadêmico, com suporte à importação do arquivo **Horario Azul - Faculdade - 2026.2.xls**.
 
 ## Versão atual
 
-`v0.3.3`
+`v0.3.7`
 
 ## Funcionalidades atuais
 
@@ -24,10 +24,12 @@ Protótipo em JavaScript para visualização e edição do horário acadêmico a
 - Desfazer para movimentações, novas aulas, edições e cancelamentos.
 - Restauração da turma para a grade-base original do Excel.
 - Impressão/PDF reflete automaticamente novas aulas, alterações e cancelamentos.
+- A visualização selecionada é preservada ao consultar aulas nas visões diária e semanal.
+- Interface compacta e orientada ao fluxo de trabalho, com detalhes e atividade em painéis secundários.
 
-## Conceito da v0.3.0
+## Modelo atual da grade
 
-O Excel passa a ser tratado como **grade-base**. O protótipo mantém a grade importada como referência e aplica alterações sobre ela:
+O Excel é tratado como **grade-base**. A aplicação mantém a grade importada como referência e aplica alterações sobre ela:
 
 ```text
 Excel / grade-base
@@ -49,7 +51,7 @@ As alterações ainda são mantidas somente na sessão do navegador. Persistênc
 
 ## Nova aula / edição
 
-Na visão da turma, use **+ Nova aula** para cadastrar um novo bloco.
+Na visão da turma, use **Nova aula** para cadastrar um novo bloco.
 
 Ao selecionar uma aula existente, use **Editar aula** para alterar:
 
@@ -72,8 +74,8 @@ npm run dev
 ## Impressão / PDF
 
 1. Escolha a semana desejada.
-2. Use `Imprimir semana / PDF` para montar o relatório de todas as turmas do curso.
-3. Use `Imprimir turma / PDF` para somente a turma selecionada.
+2. Use `Exportar semana` para montar o relatório de todas as turmas do curso.
+3. Use `Exportar turma` para somente a turma selecionada.
 4. O navegador abrirá o diálogo de impressão.
 5. Para gerar o arquivo, escolha `Salvar como PDF`.
 
@@ -101,9 +103,9 @@ src/
 ```powershell
 git status
 git add .
-git commit -m "feat: add dynamic lesson creation and schedule editing"
+git commit -m "fix: restore baseline moves and dark changed-card state"
 git push origin main
 
-git tag -a v0.3.0 -m "Dynamic schedule editing and lesson management"
+git tag -a v0.3.6 -m "Baseline conflict and dark card fixes"
 git push origin v0.3.0
 ```
