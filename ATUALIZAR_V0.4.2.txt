@@ -1,0 +1,11 @@
+Atualização v0.4.2
+
+Copie os arquivos para a raiz do projeto e substitua os existentes.
+
+Correção:
+- remove completamente qualquer rodapé legado do relatório de impressão (Fonte / Página / Gerado em).
+
+Após copiar, encerre o Vite e execute novamente:
+  npm run dev
+
+Se o navegador ainda exibir informações próprias de impressão, desative "Headers and footers / Cabeçalhos e rodapés" no diálogo de impressão.

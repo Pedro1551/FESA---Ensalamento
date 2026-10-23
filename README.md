@@ -4,10 +4,13 @@ Aplicação web em JavaScript para visualização, edição e planejamento do ho
 
 ## Versão atual
 
-`v0.3.7`
+`v0.4.4`
 
 ## Funcionalidades atuais
 
+- Malha de horários normalizada por curso, permitindo grades irregulares sem quebrar o drag-and-drop.
+- Drag-and-drop compatível com aulas de 1, 2, 3 ou mais períodos, inclusive atravessando intervalos institucionais.
+- Conflitos calculados pelos períodos realmente ocupados.
 - Importação do Excel no navegador.
 - Identificação de cursos, turmas, dias, horários, disciplinas e professores.
 - Grade semanal por turma com drag and drop.
@@ -64,6 +67,18 @@ Ao selecionar uma aula existente, use **Editar aula** para alterar:
 
 O horário final é limitado aos slots contíguos da própria grade para evitar atravessar intervalos. Antes de salvar, o sistema verifica conflito da turma e conflito de professor nas demais turmas importadas.
 
+### Ambientes e ensalamento
+
+A v0.4.0 adiciona o primeiro módulo real de salas/laboratórios:
+
+- catálogo local com 37 ambientes ativos;
+- associação de ambiente por aula;
+- bloqueio de conflitos de ambiente no mesmo horário;
+- visão `Ambientes · dia` para consultar ocupação e disponibilidade;
+- ambiente exibido nos cards e relatórios quando informado.
+
+O catálogo inicial foi transcrito do arquivo `laboratorios.csv` do sistema legado. Nesta fase ele ainda é local; em uma versão futura será migrado para cadastro persistente/banco de dados.
+
 ## Executar
 
 ```powershell
@@ -109,3 +124,22 @@ git push origin main
 git tag -a v0.3.6 -m "Baseline conflict and dark card fixes"
 git push origin v0.3.0
 ```
+
+## Versionamento sugerido para v0.4.0
+
+```powershell
+git add .
+git commit -m "feat: add room catalog and occupancy conflicts"
+git push origin main
+
+git tag -a v0.4.0 -m "Room catalog and occupancy management"
+git push origin v0.4.0
+```
+
+## Testes de regressão
+
+```powershell
+npm test
+```
+
+Os testes cobrem, entre outros casos, a grade irregular da EA7 e blocos de três períodos atravessando o intervalo.

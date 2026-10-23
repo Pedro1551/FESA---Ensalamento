@@ -1,23 +1,29 @@
 import './styles.css';
 import { parseScheduleWorkbook } from './excelParser.js';
 import { generateClassWeekPdf, generateCourseWeekPdf } from './pdfGenerator.js';
+import { ROOM_CATALOG, getRoomByCode, normalizeRoomCode } from './rooms.js';
+import { harmonizeCourseSlots, occupiedSegments, placementLabel, segmentsOverlap, spanFits } from './scheduleMath.js';
 
 const DEFAULT_FILE = '/data/Horario Azul - Faculdade - 2026.2.xls';
 const FALLBACK_FILE = '/data/horario-fallback.json';
-const APP_VERSION = '0.3.5';
+const APP_VERSION = '0.4.4';
 const VIEW_CLASS_WEEK = 'class-week';
 const VIEW_COURSE_DAY = 'course-day';
 const VIEW_COURSE_WEEK = 'course-week';
+const VIEW_ROOMS_DAY = 'rooms-day';
 
 const app = document.querySelector('#app');
 
 app.innerHTML = `
   <main class="page-shell">
     <header class="topbar">
-      <div class="brand-block">
-        <p class="eyebrow">GESTÃO ACADÊMICA</p>
-        <h1>Ensalamento</h1>
-        <p class="subtitle">Planejamento acadêmico · 2º semestre de 2026</p>
+      <div class="brand-row">
+        <img class="brand-logo" src="/logo-salvador-arena.png" alt="Logo institucional" />
+        <div class="brand-block">
+          <p class="eyebrow">GESTÃO ACADÊMICA</p>
+          <h1>Ensalamento</h1>
+          <p class="subtitle">Planejamento acadêmico · 2º semestre de 2026</p>
+        </div>
       </div>
       <label class="file-button" title="Importar uma nova grade a partir de Excel">
         <span>Importar Excel</span>
@@ -41,6 +47,7 @@ app.innerHTML = `
             <option value="${VIEW_CLASS_WEEK}">Grade da turma</option>
             <option value="${VIEW_COURSE_DAY}">Visão diária</option>
             <option value="${VIEW_COURSE_WEEK}">Visão semanal</option>
+            <option value="${VIEW_ROOMS_DAY}">Ambientes · dia</option>
           </select>
         </label>
         <label id="dayFilterLabel" hidden>
@@ -127,7 +134,7 @@ app.innerHTML = `
         <div class="lesson-form-grid">
           <label class="field field-wide"><span>Disciplina</span><input id="lessonSubject" type="text" required maxlength="160" /></label>
           <label class="field"><span>Professor</span><input id="lessonProfessor" type="text" required maxlength="120" /></label>
-          <label class="field"><span>Sala / laboratório <small>(opcional)</small></span><input id="lessonRoom" type="text" maxlength="80" /></label>
+          <label class="field"><span>Ambiente <small>(opcional)</small></span><select id="lessonRoom"></select></label>
           <label class="field"><span>Dia</span><select id="lessonDay" required></select></label>
           <label class="field"><span>Início</span><select id="lessonStart" required></select></label>
           <label class="field"><span>Fim</span><select id="lessonEnd" required></select></label>
@@ -212,11 +219,6 @@ const normalizeKey = (value) => String(value ?? '')
   .replace(/\s+/g, ' ')
   .trim();
 
-const toMinutes = (hhmm) => {
-  const [hour, minute] = hhmm.split(':').map(Number);
-  return (hour * 60) + minute;
-};
-
 function nextMondayIso() {
   const now = new Date();
   const utc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
@@ -228,6 +230,7 @@ function nextMondayIso() {
 
 function normalizeDataset(data) {
   data.courses.forEach((course) => {
+    harmonizeCourseSlots(course);
     course.classes.forEach((classItem) => {
       classItem.entries.forEach((entry) => {
         entry.courseId = entry.courseId ?? course.id;
@@ -266,6 +269,46 @@ function allEntries({ includeCancelled = true } = {}) {
   return includeCancelled ? entries : entries.filter((entry) => entry.status !== 'cancelled');
 }
 
+
+function roomLabel(room) {
+  if (!room) return 'A definir';
+  const parts = [room.code, room.name].filter(Boolean);
+  return parts.join(' · ');
+}
+
+function roomMeta(code) {
+  return getRoomByCode(code);
+}
+
+function populateRoomSelector(selectedCode = '') {
+  els.lessonRoom.innerHTML = '';
+  els.lessonRoom.add(new Option('A definir', ''));
+  ROOM_CATALOG.forEach((room) => {
+    const location = [room.name, room.building].filter(Boolean).join(' · ');
+    els.lessonRoom.add(new Option(`${room.code}${location ? ` — ${location}` : ''}`, room.code));
+  });
+  if (selectedCode && !ROOM_CATALOG.some((room) => normalizeRoomCode(room.code) === normalizeRoomCode(selectedCode))) {
+    els.lessonRoom.add(new Option(`${selectedCode} — ambiente importado`, selectedCode));
+  }
+  els.lessonRoom.value = selectedCode || '';
+}
+
+function findRoomConflicts(entry, day, startSlot, roomCode = entry.room, excludedIds = []) {
+  const roomKey = normalizeRoomCode(roomCode);
+  if (!roomKey) return [];
+  const proposed = getEntryInterval(entry, day, startSlot);
+  if (!proposed) return [];
+  const excluded = new Set([entry.id, ...excludedIds]);
+
+  return allEntries({ includeCancelled: false }).filter((other) => {
+    if (excluded.has(other.id)) return false;
+    const otherRoom = other.room || other.local || other.location || '';
+    if (normalizeRoomCode(otherRoom) !== roomKey || other.day !== day) return false;
+    const otherInterval = getEntryInterval(other);
+    return placementsOverlap(proposed, otherInterval);
+  });
+}
+
 function getCourse() {
   return dataset?.courses.find((course) => course.id === selectedCourseId) ?? null;
 }
@@ -282,30 +325,26 @@ function getEntry(entryId) {
   return allEntries().find((entry) => entry.id === entryId) ?? null;
 }
 
-function getEntryInterval(entry, day = entry.day, startSlot = entry.startSlot) {
+function getEntrySegments(entry, day = entry.day, startSlot = entry.startSlot, span = entry.span) {
   const classItem = getClassById(entry.classId);
-  if (!classItem) return null;
-  const first = classItem.slots[startSlot];
-  const last = classItem.slots[startSlot + entry.span - 1];
-  if (!first || !last) return null;
+  if (!classItem || !spanFits(classItem.slots, startSlot, span)) return null;
+  const segments = occupiedSegments(classItem.slots, startSlot, span);
+  if (!segments.length) return null;
   return {
     day,
-    start: toMinutes(first.start),
-    end: toMinutes(last.end),
-    label: `${first.start}–${last.end}`,
+    segments,
+    label: placementLabel(classItem.slots, startSlot, span),
+    start: segments[0].start,
+    end: segments.at(-1).end,
   };
 }
 
-function isContiguousSpan(classItem, startSlot, span) {
-  if (startSlot < 0 || startSlot + span > classItem.slots.length) return false;
-  for (let index = startSlot; index < startSlot + span - 1; index += 1) {
-    if (classItem.slots[index].end !== classItem.slots[index + 1].start) return false;
-  }
-  return true;
+function getEntryInterval(entry, day = entry.day, startSlot = entry.startSlot) {
+  return getEntrySegments(entry, day, startSlot, entry.span);
 }
 
-function rangesOverlap(a, b) {
-  return a.start < b.end && b.start < a.end;
+function placementsOverlap(first, second) {
+  return Boolean(first && second && first.day === second.day && segmentsOverlap(first.segments, second.segments));
 }
 
 function isImportedEntryAtBaseline(entry, { day = entry.day, startSlot = entry.startSlot, span = entry.span, professor = entry.professor } = {}) {
@@ -318,18 +357,7 @@ function isImportedEntryAtBaseline(entry, { day = entry.day, startSlot = entry.s
 
 function baselineInterval(entry) {
   if (!entry || entry.origin === 'manual') return null;
-  const classItem = getClassById(entry.classId);
-  if (!classItem) return null;
-  const startSlot = Number(entry.originalStartSlot);
-  const span = Number(entry.originalSpan);
-  const first = classItem.slots[startSlot];
-  const last = classItem.slots[startSlot + span - 1];
-  if (!first || !last || !entry.originalDay) return null;
-  return {
-    day: entry.originalDay,
-    start: toMinutes(first.start),
-    end: toMinutes(last.end),
-  };
+  return getEntrySegments(entry, entry.originalDay, Number(entry.originalStartSlot), Number(entry.originalSpan));
 }
 
 function baselineEntriesOverlap(entry, other) {
@@ -343,8 +371,7 @@ function baselineEntriesOverlap(entry, other) {
 
   const entryBaseline = baselineInterval(entry);
   const otherBaseline = baselineInterval(other);
-  if (!entryBaseline || !otherBaseline || entryBaseline.day !== otherBaseline.day) return false;
-  return rangesOverlap(entryBaseline, otherBaseline);
+  return placementsOverlap(entryBaseline, otherBaseline);
 }
 
 function isBaselineApprovedProfessorOverlap(entry, day, startSlot, other) {
@@ -368,7 +395,7 @@ function findProfessorConflicts(entry, day, startSlot, excludedIds = []) {
     const commonProfessor = professorKeys(other.professor).some((key) => sourceProfessors.includes(key));
     if (!commonProfessor || other.day !== day) return false;
     const otherInterval = getEntryInterval(other);
-    if (!otherInterval || !rangesOverlap(proposed, otherInterval)) return false;
+    if (!placementsOverlap(proposed, otherInterval)) return false;
     if (isBaselineApprovedProfessorOverlap(entry, day, startSlot, other)) return false;
     return true;
   });
@@ -533,7 +560,9 @@ function showLessonDetails(entry) {
   const stateLabel = entry.origin === 'manual'
     ? 'Adicionada'
     : (isImportedModified(entry) ? 'Alterada' : 'Original');
-  const room = entry.room || entry.local || entry.location || '—';
+  const room = entry.room || entry.local || entry.location || '';
+  const roomInfo = roomMeta(room);
+  const roomDisplay = roomInfo ? `${roomInfo.code} · ${roomInfo.name}${roomInfo.building ? ` · ${roomInfo.building}` : ''}` : (room || 'A definir');
 
   els.lessonDetails.className = 'lesson-details';
   els.lessonDetails.innerHTML = `
@@ -543,7 +572,7 @@ function showLessonDetails(entry) {
       <div><dt>Turma</dt><dd>${escapeHtml(entry.className)}</dd></div>
       <div><dt>Dia</dt><dd>${escapeHtml(entry.day)}</dd></div>
       <div><dt>Horário</dt><dd>${escapeHtml(interval?.label ?? '—')}</dd></div>
-      <div><dt>Sala / laboratório</dt><dd>${escapeHtml(room)}</dd></div>
+      <div><dt>Ambiente</dt><dd>${escapeHtml(roomDisplay)}</dd></div>
       <div><dt>Estado</dt><dd>${escapeHtml(stateLabel)}</dd></div>
     </dl>
   `;
@@ -554,7 +583,7 @@ function showLessonDetails(entry) {
   els.manualDay.value = entry.day;
   els.manualSlot.innerHTML = '';
   classItem.slots.forEach((slot, index) => {
-    if (isContiguousSpan(classItem, index, entry.span)) {
+    if (spanFits(classItem.slots, index, entry.span)) {
       const last = classItem.slots[index + entry.span - 1];
       els.manualSlot.add(new Option(`${slot.start}–${last.end}`, String(index)));
     }
@@ -572,7 +601,7 @@ function clearDragTargets() {
 }
 
 function canDrop(entry, classItem, slotIndex) {
-  return Boolean(entry && classItem && isContiguousSpan(classItem, slotIndex, entry.span));
+  return Boolean(entry && classItem && spanFits(classItem.slots, slotIndex, entry.span));
 }
 
 function bindDropTarget(element, day, slotIndex, classItem) {
@@ -606,6 +635,7 @@ function createLessonCard(entry, dayIndex, classItem) {
   card.style.gridRow = `${entry.startSlot + 2} / span ${entry.span}`;
   card.draggable = true;
   card.dataset.entryId = entry.id;
+  card.setAttribute('aria-grabbed', 'false');
   const room = entry.room || entry.local || entry.location || '';
   card.innerHTML = `
     ${entry.origin === 'manual' ? '<span class="lesson-badge">NOVA</span>' : ''}
@@ -624,6 +654,7 @@ function createLessonCard(entry, dayIndex, classItem) {
   card.addEventListener('dragstart', (event) => {
     dragLessonId = entry.id;
     selectedLessonId = entry.id;
+    card.setAttribute('aria-grabbed', 'true');
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', entry.id);
     try { event.dataTransfer.setDragImage(card, Math.min(40, card.offsetWidth / 2), 24); } catch { /* navegador sem suporte */ }
@@ -633,6 +664,7 @@ function createLessonCard(entry, dayIndex, classItem) {
 
   card.addEventListener('dragend', () => {
     card.classList.remove('is-dragging');
+    card.setAttribute('aria-grabbed', 'false');
     clearDragTargets();
     window.setTimeout(() => { dragLessonId = null; }, 0);
   });
@@ -714,10 +746,11 @@ function createOverviewLesson(entry, classItem) {
   const interval = getEntryInterval(entry);
   const article = document.createElement('article');
   article.className = `overview-lesson ${cardColor(entry.professor)} ${entryStateClass(entry)}`;
+  const room = entry.room || entry.local || entry.location || '';
   article.innerHTML = `
     <strong>${escapeHtml(interval?.label ?? '')}</strong>
     <span>${escapeHtml(entry.subject)}</span>
-    <small>${escapeHtml(entry.professor)}</small>
+    <small>${escapeHtml(entry.professor)}${room ? ` · ${escapeHtml(room)}` : ''}</small>
   `;
   if (entry.id === selectedLessonId && classItem.id === selectedClassId) article.classList.add('is-selected');
   article.addEventListener('click', () => {
@@ -819,7 +852,8 @@ function renderMiniSchedule(classItem) {
     card.className = `mini-entry ${cardColor(entry.professor)} ${entryStateClass(entry)}`;
     card.style.gridColumn = String(dayIndex + 2);
     card.style.gridRow = `${entry.startSlot + 2} / span ${entry.span}`;
-    card.innerHTML = `<strong>${escapeHtml(entry.subject)}</strong><span>${escapeHtml(entry.professor)}</span>`;
+    const miniRoom = entry.room || entry.local || entry.location || '';
+    card.innerHTML = `<strong>${escapeHtml(entry.subject)}</strong><span>${escapeHtml(entry.professor)}</span>${miniRoom ? `<small>${escapeHtml(miniRoom)}</small>` : ''}`;
     if (entry.id === selectedLessonId && classItem.id === selectedClassId) card.classList.add('is-selected');
     card.addEventListener('click', () => {
       selectedClassId = classItem.id;
@@ -844,11 +878,61 @@ function renderCourseWeekOverview() {
   classes.forEach((classItem) => els.overviewContainer.append(renderMiniSchedule(classItem)));
 }
 
+function renderRoomsDayOverview() {
+  const assignedEntries = allEntries({ includeCancelled: false }).filter((entry) => entry.day === selectedOverviewDay && (entry.room || entry.local || entry.location));
+  els.scheduleTitle.textContent = `Ambientes · ${selectedOverviewDay.replace('-feira', '')}`;
+  els.scheduleMeta.textContent = `${ROOM_CATALOG.length} ambientes cadastrados · ocupação institucional`;
+  els.overviewContainer.innerHTML = '';
+  els.overviewContainer.className = 'overview-container rooms-overview';
+
+  ROOM_CATALOG.forEach((room) => {
+    const roomKey = normalizeRoomCode(room.code);
+    const lessons = assignedEntries
+      .filter((entry) => normalizeRoomCode(entry.room || entry.local || entry.location) === roomKey)
+      .sort((a, b) => {
+        const aInterval = getEntryInterval(a);
+        const bInterval = getEntryInterval(b);
+        return (aInterval?.start ?? 0) - (bInterval?.start ?? 0);
+      });
+
+    const panel = document.createElement('article');
+    panel.className = `room-occupancy-panel${lessons.length ? ' is-occupied' : ' is-free'}`;
+    panel.innerHTML = `
+      <div class="room-occupancy-heading">
+        <strong>${escapeHtml(room.code)}</strong>
+        <span>${escapeHtml(room.name || room.type || 'Ambiente')}</span>
+        <small>${escapeHtml(room.building || '')}${room.extension ? ` · Ramal ${escapeHtml(room.extension)}` : ''}</small>
+      </div>
+      <div class="room-occupancy-lessons"></div>
+    `;
+    const list = panel.querySelector('.room-occupancy-lessons');
+    if (!lessons.length) {
+      list.innerHTML = '<span class="room-free-label">Livre</span>';
+    } else {
+      lessons.forEach((entry) => {
+        const interval = getEntryInterval(entry);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `room-lesson ${cardColor(entry.professor)} ${entryStateClass(entry)}`;
+        button.innerHTML = `<strong>${escapeHtml(interval?.label ?? '')}</strong><span>${escapeHtml(entry.className)} · ${escapeHtml(entry.subject)}</span><small>${escapeHtml(entry.professor)}</small>`;
+        button.addEventListener('click', () => {
+          selectedClassId = entry.classId;
+          els.classSelect.value = entry.classId;
+          selectedLessonId = entry.id;
+          render();
+        });
+        list.append(button);
+      });
+    }
+    els.overviewContainer.append(panel);
+  });
+}
+
 function updateViewControls() {
   const isClassWeek = viewMode === VIEW_CLASS_WEEK;
   els.viewModeSelect.value = viewMode;
   els.classFilterLabel.hidden = !isClassWeek;
-  els.dayFilterLabel.hidden = viewMode !== VIEW_COURSE_DAY;
+  els.dayFilterLabel.hidden = ![VIEW_COURSE_DAY, VIEW_ROOMS_DAY].includes(viewMode);
   els.scheduleScroll.hidden = !isClassWeek;
   els.overviewContainer.hidden = isClassWeek;
   els.legend.hidden = !isClassWeek;
@@ -879,7 +963,6 @@ function populateLessonEndOptions(preferredSpan = null) {
   if (!classItem || !Number.isInteger(startSlot) || !classItem.slots[startSlot]) return;
 
   for (let endIndex = startSlot; endIndex < classItem.slots.length; endIndex += 1) {
-    if (endIndex > startSlot && classItem.slots[endIndex - 1].end !== classItem.slots[endIndex].start) break;
     const span = endIndex - startSlot + 1;
     const label = `${classItem.slots[endIndex].end} · ${span} horário${span === 1 ? '' : 's'}`;
     els.lessonEnd.add(new Option(label, String(span)));
@@ -898,7 +981,7 @@ function openLessonModal(entry = null) {
   els.lessonModalTitle.textContent = entry ? 'Editar aula' : 'Nova aula';
   els.lessonSubject.value = entry?.subject ?? '';
   els.lessonProfessor.value = entry?.professor ?? '';
-  els.lessonRoom.value = entry?.room || entry?.local || entry?.location || '';
+  populateRoomSelector(entry?.room || entry?.local || entry?.location || '');
 
   els.lessonDay.innerHTML = '';
   classItem.days.forEach((day) => els.lessonDay.add(new Option(day, day)));
@@ -923,8 +1006,8 @@ function closeLessonModal() {
 
 function placementError(entry, day, startSlot, span, ignoredId = null) {
   const classItem = getClassById(entry.classId);
-  if (!classItem || !isContiguousSpan(classItem, startSlot, span)) {
-    return 'O horário selecionado atravessa um intervalo ou ultrapassa o fim da grade.';
+  if (!classItem || !spanFits(classItem.slots, startSlot, span)) {
+    return 'O bloco selecionado ultrapassa os horários disponíveis da grade.';
   }
 
   const occupied = entryAt(classItem, day, startSlot, span, ignoredId);
@@ -939,6 +1022,13 @@ function placementError(entry, day, startSlot, span, ignoredId = null) {
     const conflict = conflicts[0];
     const interval = getEntryInterval(conflict);
     return `${entry.professor} já possui ${conflict.subject} em ${conflict.className}, ${conflict.day} (${interval?.label ?? 'horário sobreposto'}).`;
+  }
+
+  const roomConflicts = findRoomConflicts({ ...entry, span }, day, startSlot, entry.room, ignoredId ? [ignoredId] : []);
+  if (roomConflicts.length) {
+    const conflict = roomConflicts[0];
+    const interval = getEntryInterval(conflict);
+    return `${entry.room} já está ocupado por ${conflict.className} · ${conflict.subject}, ${conflict.day} (${interval?.label ?? 'horário sobreposto'}).`;
   }
 
   return null;
@@ -1035,8 +1125,8 @@ function moveEntry(entryId, newDay, newStartSlot) {
   const entry = getEntry(entryId);
   const classItem = getClassById(entry?.classId);
   if (!entry || !classItem || entry.status === 'cancelled') return;
-  if (!isContiguousSpan(classItem, newStartSlot, entry.span)) {
-    setStatus('Destino inválido: o bloco atravessaria um intervalo ou não cabe no final da grade.', 'error');
+  if (!spanFits(classItem.slots, newStartSlot, entry.span)) {
+    setStatus('Destino inválido: o bloco não cabe nos horários disponíveis da grade.', 'error');
     return;
   }
   if (entry.day === newDay && entry.startSlot === newStartSlot) return;
@@ -1091,11 +1181,19 @@ function moveEntry(entryId, newDay, newStartSlot) {
     return;
   }
 
+  const roomConflicts = findRoomConflicts(entry, newDay, newStartSlot, entry.room, excluded);
+  if (roomConflicts.length) {
+    const conflict = roomConflicts[0];
+    const interval = getEntryInterval(conflict);
+    setStatus(`Conflito de ambiente: ${entry.room} já está ocupado por ${conflict.className} (${conflict.subject}) — ${conflict.day}, ${interval?.label ?? 'horário sobreposto'}.`, 'error');
+    return;
+  }
+
   const previous = { day: entry.day, startSlot: entry.startSlot };
   let swapPrevious = null;
 
   if (swapEntry) {
-    if (!isContiguousSpan(classItem, previous.startSlot, swapEntry.span)) {
+    if (!spanFits(classItem.slots, previous.startSlot, swapEntry.span)) {
       setStatus('Troca bloqueada: o segundo bloco não cabe no horário de origem.', 'error');
       return;
     }
@@ -1104,6 +1202,13 @@ function moveEntry(entryId, newDay, newStartSlot) {
       const conflict = swapConflicts[0];
       const interval = getEntryInterval(conflict);
       setStatus(`Troca bloqueada: ${swapEntry.professor} teria conflito com ${conflict.className} (${conflict.subject}) — ${conflict.day}, ${interval?.label ?? 'horário sobreposto'}.`, 'error');
+      return;
+    }
+    const swapRoomConflicts = findRoomConflicts(swapEntry, previous.day, previous.startSlot, swapEntry.room, [entry.id]);
+    if (swapRoomConflicts.length) {
+      const conflict = swapRoomConflicts[0];
+      const interval = getEntryInterval(conflict);
+      setStatus(`Troca bloqueada: ${swapEntry.room} já está ocupado por ${conflict.className} (${conflict.subject}) — ${conflict.day}, ${interval?.label ?? 'horário sobreposto'}.`, 'error');
       return;
     }
     swapPrevious = { day: swapEntry.day, startSlot: swapEntry.startSlot };
@@ -1225,6 +1330,10 @@ function render() {
   } else if (viewMode === VIEW_COURSE_DAY) {
     els.notesArea.hidden = true;
     renderCourseDayOverview();
+    showLessonDetails(getEntry(selectedLessonId));
+  } else if (viewMode === VIEW_ROOMS_DAY) {
+    els.notesArea.hidden = true;
+    renderRoomsDayOverview();
     showLessonDetails(getEntry(selectedLessonId));
   } else {
     els.notesArea.hidden = true;

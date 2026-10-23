@@ -3,6 +3,7 @@
 
 const DAY_ORDER = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const LOGO_PATH = '/logo-salvador-arena.png';
 
 const PRINT_TONES = [
   { bg: '#eef7ff', border: '#8bc8ff', accent: '#2f98ef' },
@@ -195,8 +196,13 @@ function renderClassTable(classItem) {
 function renderPageHeader({ weekStart, semesterLabel }) {
   return `
     <header class="print-header">
-      <div class="print-title">Utilização de salas/laboratórios</div>
-      <div class="semester">${escapeHtml(semesterLabel)}</div>
+      <div class="print-brand">
+        <img class="print-logo" src="${LOGO_PATH}" alt="Logo institucional" />
+        <div class="print-brand-copy">
+          <div class="print-title">Utilização de salas/laboratórios</div>
+          <div class="semester">${escapeHtml(semesterLabel)}</div>
+        </div>
+      </div>
       <div class="week-dates">
         <span></span><span></span>
         ${DAY_ORDER.map((_, index) => `<strong>${formatDate(addDays(weekStart, index))}</strong>`).join('')}
@@ -205,25 +211,18 @@ function renderPageHeader({ weekStart, semesterLabel }) {
   `;
 }
 
-function renderFooter({ course, sourceName, pageNumber, totalPages }) {
-  const generated = new Date().toLocaleString('pt-BR');
-  return `
-    <footer class="print-footer">
-      <span>${escapeHtml(course?.name || '')}${sourceName ? ` · Fonte: ${escapeHtml(sourceName)}` : ''}</span>
-      <span>${totalPages > 1 ? `Página ${pageNumber}/${totalPages} · ` : ''}Gerado em ${escapeHtml(generated)}</span>
-    </footer>
-  `;
-}
-
 function printStyles() {
   return `
-    @page { size: A4 landscape; margin: 9mm 8mm; }
+    @page { size: 297mm 210mm; margin: 8mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; color: #142033; font-family: Arial, Helvetica, sans-serif; }
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .print-page { min-height: 190mm; display: flex; flex-direction: column; break-after: page; page-break-after: always; }
+    .print-page { width: 281mm; min-height: 194mm; display: flex; flex-direction: column; break-after: page; page-break-after: always; overflow: hidden; }
     .print-page:last-child { break-after: auto; page-break-after: auto; }
     .print-header { margin-bottom: 4mm; }
+    .print-brand { display: grid; grid-template-columns: 18mm 1fr 18mm; align-items: center; column-gap: 3mm; }
+    .print-logo { width: 16mm; height: auto; justify-self: start; }
+    .print-brand-copy { text-align: center; }
     .print-title { text-align: center; font-size: 15pt; line-height: 1.05; font-weight: 800; color: #111827; }
     .semester { text-align: center; margin-top: 0.8mm; font-size: 9.8pt; font-weight: 700; color: #425166; }
     .week-dates { display: grid; grid-template-columns: 10mm 16mm repeat(6, 1fr); column-gap: 1.1mm; align-items: end; margin-top: 3.2mm; font-size: 8pt; text-align: center; }
@@ -348,9 +347,12 @@ function printStyles() {
       font-weight: 800;
       color: #8b6700;
     }
-
-    .print-footer { margin-top: auto; padding-top: 2.2mm; display: flex; justify-content: space-between; gap: 6mm; color: #667587; font-size: 6.1pt; }
+    .print-footer, footer.print-footer { display: none !important; }
     .screen-note { display: none; }
+    @media print {
+      html, body { width: 281mm; min-width: 281mm; }
+      .print-page { width: 281mm; min-width: 281mm; }
+    }
     @media screen {
       body { padding: 18px; background: #eef2f6; }
       .print-page { width: 1120px; min-height: 760px; margin: 0 auto 18px; padding: 28px; background: white; box-shadow: 0 1px 10px rgba(15, 23, 42, .12); }
@@ -369,10 +371,11 @@ function renderPrintableDocument({ title, pages }) {
   <style>${printStyles()}</style>
 </head>
 <body>
-  <div class="screen-note">Na janela de impressão, selecione <strong>Salvar como PDF</strong> se quiser gerar o arquivo PDF. Use orientação <strong>Paisagem</strong> e escala <strong>Padrão/100%</strong>.</div>
+  <div class="screen-note">Na janela de impressão, selecione <strong>Salvar como PDF</strong>. O relatório foi preparado em <strong>A4 paisagem</strong>; se o navegador mostrar a folha em retrato, altere o layout para <strong>Paisagem</strong>.</div>
   ${pages}
   <script>
     window.addEventListener('load', () => {
+      document.querySelectorAll('.print-footer, footer.print-footer').forEach((node) => node.remove());
       setTimeout(() => { window.focus(); window.print(); }, 180);
     });
     window.addEventListener('afterprint', () => window.close());
@@ -405,7 +408,6 @@ export function generateClassWeekPdf({
     <section class="print-page">
       ${renderPageHeader({ weekStart, semesterLabel })}
       ${renderClassTable(classItem)}
-      ${renderFooter({ course, sourceName, pageNumber: 1, totalPages: 1 })}
     </section>
   `;
 
@@ -442,12 +444,6 @@ export function generateCourseWeekPdf({
       <section class="print-page">
         ${renderPageHeader({ weekStart, semesterLabel })}
         ${pageClasses.map(renderClassTable).join('')}
-        ${renderFooter({
-          course,
-          sourceName,
-          pageNumber: pageIndex + 1,
-          totalPages,
-        })}
       </section>
     `;
   }

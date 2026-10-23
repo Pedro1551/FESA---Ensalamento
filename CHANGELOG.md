@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.4.4] - 2026-10-22
+
+### Corrigido
+- Drag-and-drop generalizado para aulas com qualquer quantidade de períodos, inclusive blocos que atravessam intervalos.
+- Motor de conflitos passa a comparar os períodos efetivamente ocupados, evitando falsos conflitos durante intervalos.
+- Retorno de aulas importadas à posição-base preserva os conflitos já existentes na grade original sem acusar a própria movimentação como novo conflito.
+
+### Melhorado
+- Todas as turmas de um mesmo curso passam a compartilhar a mesma malha de horários, mesmo quando o Excel original traz turmas com menos linhas preenchidas.
+- A grade pode receber movimentações e novas aulas em horários que existam no turno, independentemente de a turma original já possuir aula naquele período.
+- Adicionados testes automáticos de regressão para horários irregulares da Engenharia de Alimentos.
+
+## [0.4.3] - 2026-10-22
+
+### Adicionado
+- Logo institucional no cabeçalho principal do sistema.
+- Logo institucional no cabeçalho do PDF / impressão do ensalamento.
+
+### Melhorado
+- Ajustado o cabeçalho da aplicação para integrar melhor a identidade visual institucional.
+
+## [0.4.2] - 2026-10-22
+
+### Corrigido
+- Remoção defensiva de qualquer rodapé legado de impressão (`Fonte`, `Página` e `Gerado em`).
+- Rodapés antigos são ocultados por CSS e removidos do DOM antes de abrir a impressão.
+
+## [0.4.1] - 2026-10-22
+
+### Corrigido
+- Corrigida a impressão semanal que podia ser reduzida para uma folha em orientação retrato, deixando grande área em branco.
+- O relatório agora declara explicitamente o tamanho A4 paisagem (297 × 210 mm) e a largura útil de impressão.
+- Mantida a paginação semanal e o layout claro do relatório.
+
+## [0.4.0] - 2026-10-22
+
+### Adicionado
+- Catálogo inicial com 37 ambientes ativos (salas, laboratórios e espaços institucionais) importados do sistema legado.
+- Seleção padronizada de ambiente ao criar ou editar uma aula.
+- Validação global de conflito de ambiente entre cursos e turmas no mesmo dia/horário.
+- Nova visualização `Ambientes · dia`, mostrando ocupação institucional e ambientes livres.
+- Sala/laboratório passa a aparecer nos cards, detalhes, visões gerais e impressão quando definido.
+
+### Alterado
+- O campo livre de sala/laboratório foi substituído por um seletor baseado no catálogo de ambientes.
+
 ## [0.3.7] - 2026-10-22
 
 ### Corrigido
